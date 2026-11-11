@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pawan's Trading Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #f0f2f5; padding: 15px; margin: 0; }
+        .dashboard { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+        h2 { color: #333; text-align: center; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
+        th { background-color: #1a73e8; color: white; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+
+<div class="dashboard">
+    <h2>📈 Pawan's Live Auto-Dashboard</h2>
+    <p style="text-align:center; color:gray;">Fetching history automatically without page refresh...</p>
+    
+    <table>
+        <thead>
+            <tr>
+                <th>Time</th>
+                <th>Symbol</th>
+                <th>Price</th>
+                <th>Strategy Signal</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            <tr><td colspan="4">Loading data...</td></tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    async function loadData() {
+        try {
+            // Python API से डेटा लाना
+            let response = await fetch('/api/data');
+            let data = await response.json();
+            
+            let tableBody = document.getElementById('tableBody');
+            tableBody.innerHTML = ""; 
+
+            if(data.length === 0) {
+                tableBody.innerHTML = "<tr><td colspan='4'>No data yet. Waiting for 5-min scanner to run...</td></tr>";
+                return;
+            }
+
+            // डेटा को टेबल में डालना
+            data.forEach(item => {
+                let row = `<tr>
+                    <td>${item.time}</td>
+                    <td><strong>${item.symbol}</strong></td>
+                    <td>₹${item.price}</td>
+                    <td>${item.signal}</td>
+                </tr>`;
+                tableBody.innerHTML += row;
+            });
+        } catch (error) {
+            console.error("Error loading data", error);
+        }
+    }
+
+    // पेज खुलते ही डेटा लोड करें
+    loadData();
+    // फिर हर 30 सेकंड में चुपचाप नया डेटा मंगाते रहें
+    setInterval(loadData, 30000); 
+</script>
+
+</body>
+</html>
