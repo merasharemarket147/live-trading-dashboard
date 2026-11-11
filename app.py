@@ -29,14 +29,12 @@
         }
         .header h1 { margin: 0; font-size: 22px; color: #ffffff; }
         .header-right { display: flex; align-items: center; gap: 15px; }
-        .btn {
-            border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer;
-            font-weight: 600; font-size: 13px; transition: opacity 0.2s; color: white;
+        .scan-btn {
+            background-color: #089981; color: white; border: none;
+            padding: 8px 16px; border-radius: 4px; cursor: pointer;
+            font-weight: 600; font-size: 13px; transition: opacity 0.2s;
         }
-        .btn:hover { opacity: 0.85; }
-        .scan-btn { background-color: #089981; }
-        .download-btn { background-color: #2962ff; }
-        
+        .scan-btn:hover { opacity: 0.85; }
         .live-indicator {
             display: flex; align-items: center; font-size: 13px; color: var(--text-muted); font-weight: 500;
         }
@@ -48,16 +46,8 @@
         
         .container { padding: 25px 30px; max-width: 1200px; margin: auto; }
         
-        /* Action Bar (Tabs + Download Button) */
-        .action-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 25px;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-        .tabs { display: flex; gap: 10px; flex-wrap: wrap; }
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
         .tab-btn {
             background-color: transparent; border: 1px solid var(--border-color);
             color: var(--text-muted); padding: 10px 18px; cursor: pointer;
@@ -90,7 +80,7 @@
     <div class="header">
         <h1>📊 Pawan's Algo Terminal</h1>
         <div class="header-right">
-            <button onclick="triggerManualScan()" id="scanBtn" class="btn scan-btn">🔄 Run Scanner Now</button>
+            <button onclick="triggerManualScan()" id="scanBtn" class="scan-btn">🔄 Run Scanner Now</button>
             <div class="live-indicator">
                 <div class="dot"></div> Live Sync
             </div>
@@ -98,24 +88,20 @@
     </div>
 
     <div class="container">
-        <!-- Action Bar with Tabs and Download Button -->
-        <div class="action-bar">
-            <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('tab15m', 'First_15Min_Breakout', event)">📁 First 15-Min Candle 1.4% Breakout</button>
-                <button class="tab-btn" onclick="switchTab('tabWick', 'MTF_15Min_Wick_Reversal', event)">📁 MTF time (15 Minute) 1% Wick Reversal</button>
-                <button class="tab-btn" onclick="switchTab('tab05m', 'First_05Min_Wick_Reversal', event)">📁 First 05 min 1% Wick Reversal</button>
-            </div>
-            <button onclick="downloadCSV()" class="btn download-btn">📥 Download Active Tab CSV</button>
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('tab15m', event)">📁 First 15-Min Candle 1.4% Breakout</button>
+            <button class="tab-btn" onclick="switchTab('tabWick', event)">📁 MTF time (15 Minute) 1% Wick Reversal</button>
+            <button class="tab-btn" onclick="switchTab('tab05m', event)">📁 First 05 min 1% Wick Reversal</button>
         </div>
 
         <!-- Tab 1: First 15-Min Candle -->
         <div id="tab15m" class="table-container active">
             <table>
                 <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
                 </thead>
                 <tbody id="body15m">
-                    <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -124,10 +110,10 @@
         <div id="tabWick" class="table-container">
             <table>
                 <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
                 </thead>
                 <tbody id="bodyWick">
-                    <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -136,36 +122,22 @@
         <div id="tab05m" class="table-container">
             <table>
                 <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
                 </thead>
                 <tbody id="body05m">
-                    <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
     <script>
-        let currentActiveSource = "scanner_15m_candle";
-        let currentFileName = "First_15Min_Breakout";
-
-        function switchTab(tabId, fileName, event) {
+        function switchTab(tabId, event) {
             document.querySelectorAll('.table-container').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             
             document.getElementById(tabId).classList.add('active');
             event.currentTarget.classList.add('active');
-
-            if(tabId === 'tab15m') {
-                currentActiveSource = "scanner_15m_candle";
-                currentFileName = fileName;
-            } else if(tabId === 'tabWick') {
-                currentActiveSource = "scanner_15m_wick";
-                currentFileName = fileName;
-            } else if(tabId === 'tab05m') {
-                currentActiveSource = "scanner_05m_wick";
-                currentFileName = fileName;
-            }
         }
 
         async function triggerManualScan() {
@@ -184,12 +156,10 @@
             btn.disabled = false;
         }
 
-        let globalData = [];
-
         async function loadData() {
             try {
                 let response = await fetch('/api/data');
-                globalData = await response.json();
+                let data = await response.json();
                 
                 let body15m = document.getElementById('body15m');
                 let bodyWick = document.getElementById('bodyWick');
@@ -201,14 +171,12 @@
                 
                 let c15 = false, cWick = false, c05 = false;
 
-                globalData.forEach(item => {
-                    let tvSymbol = `NSE:${item.symbol},`;
+                data.forEach(item => {
                     let row = `<tr>
                         <td class="time-col">${item.time}</td>
                         <td class="symbol">${item.symbol}</td>
                         <td class="price-col">₹${item.price}</td>
                         <td>${item.signal}</td>
-                        <td class="price-col" style="color: #2962ff; font-weight: bold;">${tvSymbol}</td>
                     </tr>`;
                     
                     if(item.source === "scanner_15m_candle") {
@@ -223,41 +191,13 @@
                     }
                 });
 
-                if(!c15) body15m.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
-                if(!cWick) bodyWick.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
-                if(!c05) body05m.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
+                if(!c15) body15m.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
+                if(!cWick) bodyWick.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
+                if(!c05) body05m.innerHTML = `<tr><td colspan="4" class="end-msg">No signals found today.</td></tr>`;
                 
             } catch (error) {
                 console.error("Sync Error:", error);
             }
-        }
-
-        // CSV Download Function for Active Tab
-        function downloadCSV() {
-            let filteredData = globalData.filter(item => item.source === currentActiveSource);
-            
-            if(filteredData.length === 0) {
-                alert("No data available to download in this tab!");
-                return;
-            }
-
-            let csvContent = "data:text/csv;charset=utf-8,Time,Symbol,Price,Signal,TradingView Symbol\r\n";
-            
-            filteredData.forEach(item => {
-                let tvSymbol = `NSE:${item.symbol},`;
-                // Signal text se HTML tags hatana taaki CSV clean aaye
-                let cleanSignal = item.signal.replace(/<[^>]*>?/gm, '');
-                let row = `"${item.time}","${item.symbol}","${item.price}","${cleanSignal}","${tvSymbol}"`;
-                csvContent += row + "\r\n";
-            });
-
-            let encodedUri = encodeURI(csvContent);
-            let link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", `${currentFileName}_${new Date().toISOString().slice(0,10)}.csv`);
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
         }
 
         loadData();
