@@ -111,7 +111,6 @@
         }
         .close-btn:hover { color: white; }
         .modal-body { flex: 1; width: 100%; height: 100%; }
-        .modal-body iframe { width: 100%; height: 100%; border: none; }
     </style>
 </head>
 <body>
@@ -194,9 +193,12 @@
                 <h3 id="modalTitle">Live Chart View</h3>
                 <button class="close-btn" onclick="closeModal()">&times;</button>
             </div>
-            <div class="modal-body" id="modalBodyContainer"></div>
+            <div class="modal-body" id="tradingview_widget"></div>
         </div>
     </div>
+
+    <!-- TradingView Widget Script -->
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
 
     <script>
         let currentActiveSource = "scanner_15m_candle";
@@ -297,22 +299,35 @@
             }
         }
 
-        // Open Popup Modal with Direct Chart URL
+        // Open TradingView Widget Popup Modal with explicit NSE exchange prefix
         function openChart(symbol, interval) {
             let modal = document.getElementById('chartModal');
             let title = document.getElementById('modalTitle');
-            let container = document.getElementById('modalBodyContainer');
-            
             title.innerText = `Live Chart: NSE:${symbol} (${interval} Minute Timeframe)`;
             modal.style.display = 'flex';
 
-            let chartUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${symbol}&interval=${interval}&theme=dark`;
-            container.innerHTML = `<iframe src="${chartUrl}"></iframe>`;
+            document.getElementById('tradingview_widget').innerHTML = "";
+
+            new TradingView.widget({
+                "width": "100%",
+                "height": "100%",
+                "symbol": `NSE:${symbol}`,
+                "interval": interval,
+                "timezone": "Asia/Kolkata",
+                "theme": "dark",
+                "style": "1",
+                "locale": "en",
+                "toolbar_bg": "#f1f3f6",
+                "enable_publishing": false,
+                "hide_side_toolbar": false,
+                "allow_symbol_change": true,
+                "container_id": "tradingview_widget"
+            });
         }
 
         function closeModal() {
             document.getElementById('chartModal').style.display = 'none';
-            document.getElementById('modalBodyContainer').innerHTML = "";
+            document.getElementById('tradingview_widget').innerHTML = "";
         }
 
         window.onclick = function(event) {
