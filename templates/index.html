@@ -245,7 +245,6 @@
             
             filteredData.forEach(item => {
                 let tvSymbol = `NSE:${item.symbol},`;
-                // Signal text se HTML tags hatana taaki CSV clean aaye
                 let cleanSignal = item.signal.replace(/<[^>]*>?/gm, '');
                 let row = `"${item.time}","${item.symbol}","${item.price}","${cleanSignal}","${tvSymbol}"`;
                 csvContent += row + "\r\n";
