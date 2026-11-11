@@ -6,25 +6,19 @@
     <title>Pawan's Trading Terminal</title>
     <style>
         :root {
-            /* Professional Dark Theme Colors */
             --bg-color: #0b0e14;
             --panel-bg: #151924;
             --text-main: #d1d4dc;
             --text-muted: #787b86;
             --border-color: #2a2e39;
             --accent: #2962ff;
-            --accent-hover: #1e53e5;
         }
-        
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg-color);
             color: var(--text-main);
-            margin: 0;
-            padding: 0;
+            margin: 0; padding: 0;
         }
-        
-        /* Top Navigation Bar */
         .header {
             background-color: var(--panel-bg);
             padding: 15px 30px;
@@ -33,168 +27,110 @@
             justify-content: space-between;
             align-items: center;
         }
-        .header h1 {
-            margin: 0;
-            font-size: 22px;
-            color: #ffffff;
-            letter-spacing: 0.5px;
+        .header h1 { margin: 0; font-size: 22px; color: #ffffff; }
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .scan-btn {
+            background-color: #089981; color: white; border: none;
+            padding: 8px 16px; border-radius: 4px; cursor: pointer;
+            font-weight: 600; font-size: 13px; transition: opacity 0.2s;
         }
+        .scan-btn:hover { opacity: 0.85; }
         .live-indicator {
-            display: flex;
-            align-items: center;
-            font-size: 13px;
-            color: var(--text-muted);
-            font-weight: 500;
+            display: flex; align-items: center; font-size: 13px; color: var(--text-muted); font-weight: 500;
         }
         .dot {
-            height: 8px; width: 8px;
-            background-color: #089981;
-            border-radius: 50%;
-            margin-right: 8px;
-            box-shadow: 0 0 10px #089981;
-            animation: blink 2s infinite;
+            height: 8px; width: 8px; background-color: #089981; border-radius: 50%;
+            margin-right: 8px; box-shadow: 0 0 10px #089981; animation: blink 2s infinite;
         }
         @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
         
-        .container {
-            padding: 25px 30px;
-            max-width: 1100px;
-            margin: auto;
-        }
+        .container { padding: 25px 30px; max-width: 1200px; margin: auto; }
         
-        /* Strategy Tabs */
-        .tabs {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 25px;
-        }
+        /* Tabs */
+        .tabs { display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
         .tab-btn {
-            background-color: transparent;
-            border: 1px solid var(--border-color);
-            color: var(--text-muted);
-            padding: 12px 24px;
-            cursor: pointer;
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 14px;
-            transition: all 0.2s ease;
+            background-color: transparent; border: 1px solid var(--border-color);
+            color: var(--text-muted); padding: 10px 18px; cursor: pointer;
+            border-radius: 6px; font-weight: 600; font-size: 13px; transition: all 0.2s ease;
         }
-        .tab-btn.active {
-            background-color: var(--accent);
-            color: #ffffff;
-            border-color: var(--accent);
-        }
-        .tab-btn:hover:not(.active) {
-            background-color: #1e222d;
-            color: var(--text-main);
-        }
+        .tab-btn.active { background-color: var(--accent); color: #ffffff; border-color: var(--accent); }
+        .tab-btn:hover:not(.active) { background-color: #1e222d; color: var(--text-main); }
         
-        /* Data Tables */
+        /* Tables */
         .table-container {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            overflow: hidden;
-            display: none; /* Hidden by default */
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            background: var(--panel-bg); border: 1px solid var(--border-color);
+            border-radius: 8px; overflow: hidden; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
-        .table-container.active {
-            display: block; /* Show active tab */
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-        }
-        th, td {
-            padding: 14px 20px;
-            border-bottom: 1px solid var(--border-color);
-        }
+        .table-container.active { display: block; }
+        table { width: 100%; border-collapse: collapse; text-align: left; }
+        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
         th {
-            background-color: #0b0e14;
-            color: var(--text-muted);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            font-weight: 600;
+            background-color: #0b0e14; color: var(--text-muted); font-size: 12px;
+            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
         }
-        tr:hover {
-            background-color: #1e222d;
-        }
-        .symbol {
-            font-weight: 700;
-            color: #ffffff;
-            font-size: 15px;
-        }
-        .time-col {
-            color: var(--text-muted);
-            font-size: 13px;
-        }
-        .price-col {
-            font-family: monospace;
-            font-size: 14px;
-        }
-        .empty-msg {
-            text-align: center;
-            padding: 40px;
-            color: var(--text-muted);
-            font-style: italic;
-        }
+        tr:hover { background-color: #1e222d; }
+        .symbol { font-weight: 700; color: #ffffff; font-size: 15px; }
+        .time-col { color: var(--text-muted); font-size: 13px; }
+        .price-col { font-family: monospace; font-size: 14px; }
+        .empty-msg { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; }
     </style>
 </head>
 <body>
 
-    <!-- Header Section -->
     <div class="header">
         <h1>📊 Pawan's Algo Terminal</h1>
-        <div class="live-indicator">
-            <div class="dot"></div> Live Sync
+        <div class="header-right">
+            <button onclick="triggerManualScan()" id="scanBtn" class="scan-btn">🔄 Run Scanner Now</button>
+            <div class="live-indicator">
+                <div class="dot"></div> Live Sync
+            </div>
         </div>
     </div>
 
     <div class="container">
-        <!-- Tabs Section -->
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('candleTab', event)">🚀 1st Candle Breakouts</button>
-            <button class="tab-btn" onclick="switchTab('wickTab', event)">🎯 15-Min Wick Reversals</button>
+            <button class="tab-btn active" onclick="switchTab('tab15m', event)">📁 First 15-Min Candle 1.4% Breakout</button>
+            <button class="tab-btn" onclick="switchTab('tabWick', event)">📁 MTF time (15 Minute) 1% Wick Reversal</button>
+            <button class="tab-btn" onclick="switchTab('tab05m', event)">📁 First 05-Min Candle 1% Breakout</button>
         </div>
 
-        <!-- 1st Candle Scanner Table -->
-        <div id="candleTab" class="table-container active">
+        <!-- Tab 1: First 15-Min Candle -->
+        <div id="tab15m" class="table-container active">
             <table>
                 <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Symbol</th>
-                        <th>LTP</th>
-                        <th>Signal Alert</th>
-                    </tr>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
                 </thead>
-                <tbody id="candleBody">
+                <tbody id="body15m">
                     <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- Wick Reversal Scanner Table -->
-        <div id="wickTab" class="table-container">
+        <!-- Tab 2: Wick Reversal -->
+        <div id="tabWick" class="table-container">
             <table>
                 <thead>
-                    <tr>
-                        <th>Time</th>
-                        <th>Symbol</th>
-                        <th>LTP</th>
-                        <th>Signal Alert</th>
-                    </tr>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
                 </thead>
-                <tbody id="wickBody">
+                <tbody id="bodyWick">
+                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tab 3: First 5-Min Candle -->
+        <div id="tab05m" class="table-container">
+            <table>
+                <thead>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
+                </thead>
+                <tbody id="body05m">
                     <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <!-- JavaScript for separating data and switching tabs -->
     <script>
         function switchTab(tabId, event) {
             document.querySelectorAll('.table-container').forEach(t => t.classList.remove('active'));
@@ -204,19 +140,36 @@
             event.currentTarget.classList.add('active');
         }
 
+        async function triggerManualScan() {
+            let btn = document.getElementById('scanBtn');
+            btn.innerText = "Scanning...";
+            btn.disabled = true;
+            try {
+                let res = await fetch('/trigger-scanner');
+                let data = await res.json();
+                alert("Scan Complete! New signals added: " + data.signals_added);
+                loadData();
+            } catch (err) {
+                alert("Scan Error!");
+            }
+            btn.innerText = "🔄 Run Scanner Now";
+            btn.disabled = false;
+        }
+
         async function loadData() {
             try {
                 let response = await fetch('/api/data');
                 let data = await response.json();
                 
-                let wickBody = document.getElementById('wickBody');
-                let candleBody = document.getElementById('candleBody');
+                let body15m = document.getElementById('body15m');
+                let bodyWick = document.getElementById('bodyWick');
+                let body05m = document.getElementById('body05m');
                 
-                wickBody.innerHTML = "";
-                candleBody.innerHTML = "";
+                body15m.innerHTML = "";
+                bodyWick.innerHTML = "";
+                body05m.innerHTML = "";
                 
-                let hasWick = false;
-                let hasCandle = false;
+                let c15 = false, cWick = false, c05 = false;
 
                 data.forEach(item => {
                     let row = `<tr>
@@ -226,25 +179,27 @@
                         <td>${item.signal}</td>
                     </tr>`;
                     
-                    // JavaScript id check karke data ko alag-alag tab me bhej raha hai
-                    if(item.id.includes("1stCandle")) {
-                        candleBody.innerHTML += row;
-                        hasCandle = true;
-                    } else {
-                        wickBody.innerHTML += row;
-                        hasWick = true;
+                    if(item.source === "scanner_15m_candle") {
+                        body15m.innerHTML += row;
+                        c15 = true;
+                    } else if(item.source === "scanner_15m_wick") {
+                        bodyWick.innerHTML += row;
+                        cWick = true;
+                    } else if(item.source === "scanner_05m_candle") {
+                        body05m.innerHTML += row;
+                        c05 = true;
                     }
                 });
 
-                if(!hasWick) wickBody.innerHTML = `<tr><td colspan="4" class="empty-msg">No Wick Reversals found today.</td></tr>`;
-                if(!hasCandle) candleBody.innerHTML = `<tr><td colspan="4" class="empty-msg">No 1st Candle breakouts found today.</td></tr>`;
+                if(!c15) body15m.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
+                if(!cWick) bodyWick.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
+                if(!c05) body05m.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
                 
             } catch (error) {
                 console.error("Sync Error:", error);
             }
         }
 
-        // Run instantly on load, then every 15 seconds
         loadData();
         setInterval(loadData, 15000); 
     </script>
