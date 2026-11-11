@@ -24,7 +24,7 @@ def get_data():
 def run_scanner():
     file_name = "watchlist.csv"
     
-    # अगर फाइल नहीं मिली, तो डिफॉल्ट स्टॉक्स लेगा (क्रैश होने से बचाने के लिए)
+    # अगर फाइल नहीं मिली, तो डिफॉल्ट स्टॉक्स लेगा
     if os.path.exists(file_name):
         watchlist_df = pd.read_csv(file_name)
         stocks_list = watchlist_df['Symbol'].dropna().tolist()
@@ -33,8 +33,6 @@ def run_scanner():
 
     wick_threshold = 1      
     min_price = 100           
-    min_mcap_cr = 30000       
-
     new_signals_count = 0
 
     for symbol in stocks_list:
@@ -82,47 +80,39 @@ def run_scanner():
             sell_signals = today_df[today_df['Upper_Wick_Pct'] >= wick_threshold]
             
             if not buy_signals.empty or not sell_signals.empty:
-                try:
-                    ticker_info = yf.Ticker(symbol).info
-                    raw_mcap = ticker_info.get('marketCap', 0)
-                    mcap_cr = round(raw_mcap / 10000000, 2)
-                except:
-                    mcap_cr = 0
                     
-                if mcap_cr >= min_mcap_cr:
+                # Buy Signals
+                for idx, row in buy_signals.iterrows():
+                    candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
+                    signal_id = f"{clean_name}_{candle_time}_BUY"
                     
-                    # Buy Signals
-                    for idx, row in buy_signals.iterrows():
-                        candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
-                        signal_id = f"{clean_name}_{candle_time}_BUY"
+                    # डुप्लीकेट चेक करना
+                    if not any(item.get('id') == signal_id for item in daily_data_history):
+                        new_result = {
+                            "id": signal_id,
+                            "time": candle_time,
+                            "symbol": clean_name,
+                            "price": round(row['Close'], 2),
+                            "signal": f"<span style='color:green;font-weight:bold;'>BUY (Low Wick {round(row['Lower_Wick_Pct'], 2)}%)</span>"
+                        }
+                        daily_data_history.insert(0, new_result)
+                        new_signals_count += 1
                         
-                        # डुप्लीकेट चेक करना
-                        if not any(item.get('id') == signal_id for item in daily_data_history):
-                            new_result = {
-                                "id": signal_id,
-                                "time": candle_time,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:green;font-weight:bold;'>BUY (Low Wick {round(row['Lower_Wick_Pct'], 2)}%)</span>"
-                            }
-                            daily_data_history.insert(0, new_result)
-                            new_signals_count += 1
-                            
-                    # Sell Signals
-                    for idx, row in sell_signals.iterrows():
-                        candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
-                        signal_id = f"{clean_name}_{candle_time}_SELL"
-                        
-                        if not any(item.get('id') == signal_id for item in daily_data_history):
-                            new_result = {
-                                "id": signal_id,
-                                "time": candle_time,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:red;font-weight:bold;'>SELL (Up Wick {round(row['Upper_Wick_Pct'], 2)}%)</span>"
-                            }
-                            daily_data_history.insert(0, new_result)
-                            new_signals_count += 1
+                # Sell Signals
+                for idx, row in sell_signals.iterrows():
+                    candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
+                    signal_id = f"{clean_name}_{candle_time}_SELL"
+                    
+                    if not any(item.get('id') == signal_id for item in daily_data_history):
+                        new_result = {
+                            "id": signal_id,
+                            "time": candle_time,
+                            "symbol": clean_name,
+                            "price": round(row['Close'], 2),
+                            "signal": f"<span style='color:red;font-weight:bold;'>SELL (Up Wick {round(row['Upper_Wick_Pct'], 2)}%)</span>"
+                        }
+                        daily_data_history.insert(0, new_result)
+                        new_signals_count += 1
 
         except Exception as e:
             print(f"Error with {symbol}: {e}")
