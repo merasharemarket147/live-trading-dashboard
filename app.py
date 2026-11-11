@@ -12,7 +12,7 @@ app = Flask(__name__)
 daily_data_history = []
 tz = pytz.timezone('Asia/Kolkata')
 
-# Yahoo Finance को ब्लॉक करने से रोकने के लिए Fake Browser Session (User-Agent)
+# Yahoo Finance को ब्लॉक करने से रोकने के लिए Fake Browser Session
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -26,19 +26,20 @@ def home():
 def get_data():
     return jsonify(daily_data_history)
 
-# यह लिंक आपका स्कैनर चलाएगा
+# यह लिंक अब आपके दोनों (Wick Reversal + First Candle) स्कैनर एक साथ चलाएगा
 @app.route('/trigger-scanner')
 def run_scanner():
     file_name = "watchlist.csv"
     
-    # अगर फाइल नहीं मिली, तो डिफॉल्ट स्टॉक्स लेगा
     if os.path.exists(file_name):
         watchlist_df = pd.read_csv(file_name)
         stocks_list = watchlist_df['Symbol'].dropna().tolist()
     else:
         stocks_list = ["NIFTY 50.NS", "RELIANCE.NS", "HDFCBANK.NS"]
 
-    wick_threshold = 1      
+    # दोनों स्कैनर्स की सेटिंग्स
+    wick_threshold = 1.0      
+    first_candle_threshold = 1.4
     min_price = 100           
     new_signals_count = 0
 
@@ -46,7 +47,7 @@ def run_scanner():
         clean_name = symbol.replace(".NS", "")
         
         try:
-            # यहाँ हमने session=session जोड़ दिया है ताकि Yahoo हमें इंसान समझे!
+            # 15 Minute डेटा फेच करना (सिर्फ एक बार)
             df = yf.download(symbol, period="5d", interval="15m", progress=False, session=session)
             
             if df.empty:
@@ -74,8 +75,39 @@ def run_scanner():
             current_price = float(today_df['Close'].iloc[-1])
             if current_price < min_price:
                 continue
+            
+            # =======================================================
+            # SCANNER 1: First 15-Min Candle 1.4% Breakout/Breakdown
+            # =======================================================
+            first_candle = today_df.iloc[0]
+            c_open = float(first_candle['Open'])
+            c_close = float(first_candle['Close'])
+            first_candle_time = first_candle[time_col].strftime("%Y-%m-%d %H:%M")
+            
+            pct_change = ((c_close - c_open) / c_open) * 100
+            
+            if abs(pct_change) >= first_candle_threshold:
+                fc_signal_id = f"{clean_name}_{first_candle_time}_1stCandle"
                 
-            # Wick Size Calculation
+                if not any(item.get('id') == fc_signal_id for item in daily_data_history):
+                    if pct_change > 0:
+                        signal_text = f"<span style='color:#00b894;font-weight:bold;'>🚀 1st Candle Rally ({round(pct_change, 2)}%)</span>"
+                    else:
+                        signal_text = f"<span style='color:#d63031;font-weight:bold;'>🩸 1st Candle Fall ({round(pct_change, 2)}%)</span>"
+                    
+                    new_result = {
+                        "id": fc_signal_id,
+                        "time": first_candle_time,
+                        "symbol": clean_name,
+                        "price": round(c_close, 2),
+                        "signal": signal_text
+                    }
+                    daily_data_history.insert(0, new_result)
+                    new_signals_count += 1
+
+            # =======================================================
+            # SCANNER 2: MTF 15-Min 1% Wick Reversal
+            # =======================================================
             today_df['Max_Open_Close'] = today_df[['Open', 'Close']].max(axis=1)
             today_df['Min_Open_Close'] = today_df[['Open', 'Close']].min(axis=1)
             today_df['Upper_Wick'] = today_df['High'] - today_df['Max_Open_Close']
@@ -87,11 +119,10 @@ def run_scanner():
             sell_signals = today_df[today_df['Upper_Wick_Pct'] >= wick_threshold]
             
             if not buy_signals.empty or not sell_signals.empty:
-                    
                 # Buy Signals
                 for idx, row in buy_signals.iterrows():
                     candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
-                    signal_id = f"{clean_name}_{candle_time}_BUY"
+                    signal_id = f"{clean_name}_{candle_time}_BUY_WICK"
                     
                     if not any(item.get('id') == signal_id for item in daily_data_history):
                         new_result = {
@@ -107,7 +138,7 @@ def run_scanner():
                 # Sell Signals
                 for idx, row in sell_signals.iterrows():
                     candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
-                    signal_id = f"{clean_name}_{candle_time}_SELL"
+                    signal_id = f"{clean_name}_{candle_time}_SELL_WICK"
                     
                     if not any(item.get('id') == signal_id for item in daily_data_history):
                         new_result = {
@@ -121,7 +152,6 @@ def run_scanner():
                         new_signals_count += 1
 
         except Exception as e:
-            # एरर आने पर सर्वर क्रैश नहीं होगा, बस अगले स्टॉक पर चला जाएगा
             continue
 
     # मेमोरी बचाने के लिए सिर्फ लेटेस्ट 200 सिग्नल रखना
