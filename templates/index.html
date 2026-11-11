@@ -3,73 +3,250 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pawan's Trading Dashboard</title>
+    <title>Pawan's Trading Terminal</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f0f2f5; padding: 15px; margin: 0; }
-        .dashboard { max-width: 900px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h2 { color: #333; text-align: center; }
-        table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 14px; }
-        th, td { border: 1px solid #ddd; padding: 12px; text-align: center; }
-        th { background-color: #1a73e8; color: white; }
-        tr:nth-child(even) { background-color: #f9f9f9; }
+        :root {
+            /* Professional Dark Theme Colors */
+            --bg-color: #0b0e14;
+            --panel-bg: #151924;
+            --text-main: #d1d4dc;
+            --text-muted: #787b86;
+            --border-color: #2a2e39;
+            --accent: #2962ff;
+            --accent-hover: #1e53e5;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Top Navigation Bar */
+        .header {
+            background-color: var(--panel-bg);
+            padding: 15px 30px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 22px;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+        }
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            font-size: 13px;
+            color: var(--text-muted);
+            font-weight: 500;
+        }
+        .dot {
+            height: 8px; width: 8px;
+            background-color: #089981;
+            border-radius: 50%;
+            margin-right: 8px;
+            box-shadow: 0 0 10px #089981;
+            animation: blink 2s infinite;
+        }
+        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
+        
+        .container {
+            padding: 25px 30px;
+            max-width: 1100px;
+            margin: auto;
+        }
+        
+        /* Strategy Tabs */
+        .tabs {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 25px;
+        }
+        .tab-btn {
+            background-color: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-muted);
+            padding: 12px 24px;
+            cursor: pointer;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+        .tab-btn.active {
+            background-color: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+        }
+        .tab-btn:hover:not(.active) {
+            background-color: #1e222d;
+            color: var(--text-main);
+        }
+        
+        /* Data Tables */
+        .table-container {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            display: none; /* Hidden by default */
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+        }
+        .table-container.active {
+            display: block; /* Show active tab */
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+        }
+        th, td {
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        th {
+            background-color: #0b0e14;
+            color: var(--text-muted);
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 600;
+        }
+        tr:hover {
+            background-color: #1e222d;
+        }
+        .symbol {
+            font-weight: 700;
+            color: #ffffff;
+            font-size: 15px;
+        }
+        .time-col {
+            color: var(--text-muted);
+            font-size: 13px;
+        }
+        .price-col {
+            font-family: monospace;
+            font-size: 14px;
+        }
+        .empty-msg {
+            text-align: center;
+            padding: 40px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
     </style>
 </head>
 <body>
 
-<div class="dashboard">
-    <h2>📈 Pawan's Live Auto-Dashboard</h2>
-    <p style="text-align:center; color:gray;">Fetching history automatically without page refresh...</p>
-    
-    <table>
-        <thead>
-            <tr>
-                <th>Time</th>
-                <th>Symbol</th>
-                <th>Price</th>
-                <th>Strategy Signal</th>
-            </tr>
-        </thead>
-        <tbody id="tableBody">
-            <tr><td colspan="4">Loading data...</td></tr>
-        </tbody>
-    </table>
-</div>
+    <!-- Header Section -->
+    <div class="header">
+        <h1>📊 Pawan's Algo Terminal</h1>
+        <div class="live-indicator">
+            <div class="dot"></div> Live Sync
+        </div>
+    </div>
 
-<script>
-    async function loadData() {
-        try {
-            // Python API से डेटा लाना
-            let response = await fetch('/api/data');
-            let data = await response.json();
+    <div class="container">
+        <!-- Tabs Section -->
+        <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab('candleTab', event)">🚀 1st Candle Breakouts</button>
+            <button class="tab-btn" onclick="switchTab('wickTab', event)">🎯 15-Min Wick Reversals</button>
+        </div>
+
+        <!-- 1st Candle Scanner Table -->
+        <div id="candleTab" class="table-container active">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>LTP</th>
+                        <th>Signal Alert</th>
+                    </tr>
+                </thead>
+                <tbody id="candleBody">
+                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Wick Reversal Scanner Table -->
+        <div id="wickTab" class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Symbol</th>
+                        <th>LTP</th>
+                        <th>Signal Alert</th>
+                    </tr>
+                </thead>
+                <tbody id="wickBody">
+                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- JavaScript for separating data and switching tabs -->
+    <script>
+        function switchTab(tabId, event) {
+            document.querySelectorAll('.table-container').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             
-            let tableBody = document.getElementById('tableBody');
-            tableBody.innerHTML = ""; 
-
-            if(data.length === 0) {
-                tableBody.innerHTML = "<tr><td colspan='4'>No data yet. Waiting for 5-min scanner to run...</td></tr>";
-                return;
-            }
-
-            // डेटा को टेबल में डालना
-            data.forEach(item => {
-                let row = `<tr>
-                    <td>${item.time}</td>
-                    <td><strong>${item.symbol}</strong></td>
-                    <td>₹${item.price}</td>
-                    <td>${item.signal}</td>
-                </tr>`;
-                tableBody.innerHTML += row;
-            });
-        } catch (error) {
-            console.error("Error loading data", error);
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
         }
-    }
 
-    // पेज खुलते ही डेटा लोड करें
-    loadData();
-    // फिर हर 30 सेकंड में चुपचाप नया डेटा मंगाते रहें
-    setInterval(loadData, 30000); 
-</script>
+        async function loadData() {
+            try {
+                let response = await fetch('/api/data');
+                let data = await response.json();
+                
+                let wickBody = document.getElementById('wickBody');
+                let candleBody = document.getElementById('candleBody');
+                
+                wickBody.innerHTML = "";
+                candleBody.innerHTML = "";
+                
+                let hasWick = false;
+                let hasCandle = false;
 
+                data.forEach(item => {
+                    let row = `<tr>
+                        <td class="time-col">${item.time}</td>
+                        <td class="symbol">${item.symbol}</td>
+                        <td class="price-col">₹${item.price}</td>
+                        <td>${item.signal}</td>
+                    </tr>`;
+                    
+                    // JavaScript id check karke data ko alag-alag tab me bhej raha hai
+                    if(item.id.includes("1stCandle")) {
+                        candleBody.innerHTML += row;
+                        hasCandle = true;
+                    } else {
+                        wickBody.innerHTML += row;
+                        hasWick = true;
+                    }
+                });
+
+                if(!hasWick) wickBody.innerHTML = `<tr><td colspan="4" class="empty-msg">No Wick Reversals found today.</td></tr>`;
+                if(!hasCandle) candleBody.innerHTML = `<tr><td colspan="4" class="empty-msg">No 1st Candle breakouts found today.</td></tr>`;
+                
+            } catch (error) {
+                console.error("Sync Error:", error);
+            }
+        }
+
+        // Run instantly on load, then every 15 seconds
+        loadData();
+        setInterval(loadData, 15000); 
+    </script>
 </body>
 </html>
