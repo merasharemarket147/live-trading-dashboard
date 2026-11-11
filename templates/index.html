@@ -230,12 +230,9 @@
                     let interval = "15";
                     if(item.source.includes("05m")) interval = "5";
 
-                    // Direct link to open exact stock chart in a new tab
-                    let tvUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${item.symbol}&interval=${interval}`;
-
                     let row = `<tr>
                         <td class="time-col">${item.time}</td>
-                        <td><a href="${tvUrl}" target="_blank" class="symbol-link">${item.symbol} ↗</a></td>
+                        <td><span class="symbol-link" onclick="openNewWindow('${item.symbol}', '${interval}')">${item.symbol} ↗</span></td>
                         <td class="price-col">₹${item.price}</td>
                         <td>${item.signal}</td>
                         <td class="price-col" style="color: #2962ff; font-weight: bold;">${tvSymbol}</td>
@@ -266,5 +263,41 @@
             }
         }
 
+        // Forcefully Open Chart in a New Browser Tab/Window using JavaScript
+        function openNewWindow(symbol, interval) {
+            let chartUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${symbol}&interval=${interval}`;
+            window.open(chartUrl, '_blank');
+        }
+
         // CSV Download Function
-        function downloadCSV()
+        function downloadCSV() {
+            let filteredData = globalData.filter(item => item.source === currentActiveSource);
+            
+            if(filteredData.length === 0) {
+                alert("No data available to download in this tab!");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,Time,Symbol,Price,Signal,TradingView Symbol\r\n";
+            
+            filteredData.forEach(item => {
+                let tvSymbol = `NSE:${item.symbol},`;
+                let cleanSignal = item.signal.replace(/<[^>]*>?/gm, '');
+                let row = `"${item.time}","${item.symbol}","${item.price}","${cleanSignal}","${tvSymbol}"`;
+                csvContent += row + "\r\n";
+            });
+
+            let encodedUri = encodeURI(csvContent);
+            let link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `${currentFileName}_${new Date().toISOString().slice(0,10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        loadData();
+        setInterval(loadData, 15000); 
+    </script>
+</body>
+</html>
