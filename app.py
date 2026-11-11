@@ -4,12 +4,19 @@ import yfinance as yf
 import pandas as pd
 import pytz
 import os
+import requests
 
 app = Flask(__name__)
 
 # दिन भर का डेटा सेव रखने के लिए लिस्ट
 daily_data_history = []
 tz = pytz.timezone('Asia/Kolkata')
+
+# Yahoo Finance को ब्लॉक करने से रोकने के लिए Fake Browser Session (User-Agent)
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+})
 
 @app.route('/')
 def home():
@@ -39,8 +46,8 @@ def run_scanner():
         clean_name = symbol.replace(".NS", "")
         
         try:
-            # 15 Minute डेटा फेच करना
-            df = yf.download(symbol, period="5d", interval="15m", progress=False)
+            # यहाँ हमने session=session जोड़ दिया है ताकि Yahoo हमें इंसान समझे!
+            df = yf.download(symbol, period="5d", interval="15m", progress=False, session=session)
             
             if df.empty:
                 continue
@@ -86,7 +93,6 @@ def run_scanner():
                     candle_time = row[time_col].strftime("%Y-%m-%d %H:%M")
                     signal_id = f"{clean_name}_{candle_time}_BUY"
                     
-                    # डुप्लीकेट चेक करना
                     if not any(item.get('id') == signal_id for item in daily_data_history):
                         new_result = {
                             "id": signal_id,
@@ -115,7 +121,7 @@ def run_scanner():
                         new_signals_count += 1
 
         except Exception as e:
-            print(f"Error with {symbol}: {e}")
+            # एरर आने पर सर्वर क्रैश नहीं होगा, बस अगले स्टॉक पर चला जाएगा
             continue
 
     # मेमोरी बचाने के लिए सिर्फ लेटेस्ट 200 सिग्नल रखना
