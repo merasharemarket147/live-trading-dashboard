@@ -73,7 +73,7 @@
         }
         .table-container.active { display: block; }
         table { width: 100%; border-collapse: collapse; text-align: left; }
-        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
+        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-color); position: relative; }
         th {
             background-color: #0b0e14; color: var(--text-muted); font-size: 12px;
             text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
@@ -89,6 +89,37 @@
         .time-col { color: var(--text-muted); font-size: 13px; }
         .price-col { font-family: monospace; font-size: 14px; }
         .empty-msg { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; }
+
+        /* Mouse-over (Hover) Tooltip / Mini Preview Popup */
+        .hover-tooltip {
+            display: none; position: absolute; left: 50px; top: -160px; width: 320px; height: 180px;
+            background-color: var(--panel-bg); border: 2px solid var(--accent); border-radius: 8px;
+            z-index: 500; box-shadow: 0 8px 20px rgba(0,0,0,0.6); overflow: hidden; pointer-events: none;
+        }
+        .hover-tooltip iframe { width: 100%; height: 100%; border: none; }
+
+        /* Full Click Popup Modal Styling */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
+            justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background-color: var(--panel-bg); border: 1px solid var(--border-color);
+            width: 90%; max-width: 1050px; height: 650px; border-radius: 10px;
+            display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        .modal-header {
+            padding: 15px 20px; background-color: #0b0e14; display: flex;
+            justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);
+        }
+        .modal-header h3 { margin: 0; color: white; font-size: 16px; font-weight: 600; }
+        .close-btn {
+            background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer;
+        }
+        .close-btn:hover { color: white; }
+        .modal-body { flex: 1; width: 100%; height: 100%; }
+        .modal-body iframe { width: 100%; height: 100%; border: none; }
     </style>
 </head>
 <body>
@@ -164,6 +195,17 @@
         </div>
     </div>
 
+    <!-- Full Click Popup Modal -->
+    <div id="chartModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalTitle">Live Chart View</h3>
+                <button class="close-btn" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBodyContainer"></div>
+        </div>
+    </div>
+
     <script>
         let currentActiveSource = "scanner_15m_candle";
         let currentFileName = "First_15Min_Breakout";
@@ -227,12 +269,17 @@
 
                 globalData.forEach(item => {
                     let tvSymbol = `NSE:${item.symbol},`;
-                    // Direct TradingView Link (Opens in a new clean tab without any annoying popup)
-                    let tvUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${item.symbol}`;
+                    let interval = "15";
+                    if(item.source.includes("05m")) interval = "5";
 
                     let row = `<tr>
                         <td class="time-col">${item.time}</td>
-                        <td><a href="${tvUrl}" target="_blank" class="symbol-link">${item.symbol} ↗</a></td>
+                        <td style="position: relative;" 
+                            onmouseenter="showHoverChart(this, '${item.symbol}', '${interval}')" 
+                            onmouseleave="hideHoverChart(this)">
+                            <span class="symbol-link" onclick="openChart('${item.symbol}', '${interval}')">${item.symbol}</span>
+                            <div class="hover-tooltip"></div>
+                        </td>
                         <td class="price-col">₹${item.price}</td>
                         <td>${item.signal}</td>
                         <td class="price-col" style="color: #2962ff; font-weight: bold;">${tvSymbol}</td>
@@ -260,6 +307,45 @@
                 
             } catch (error) {
                 console.error("Sync Error:", error);
+            }
+        }
+
+        // Mouse Over (Hover) Mini Preview Functions
+        function showHoverChart(element, symbol, interval) {
+            let tooltip = element.querySelector('.hover-tooltip');
+            let chartUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${symbol}&interval=${interval}&theme=dark&hide_top_toolbar=true`;
+            tooltip.innerHTML = `<iframe src="${chartUrl}"></iframe>`;
+            tooltip.style.display = 'block';
+        }
+
+        function hideHoverChart(element) {
+            let tooltip = element.querySelector('.hover-tooltip');
+            tooltip.style.display = 'none';
+            tooltip.innerHTML = "";
+        }
+
+        // Click Full Popup Modal Functions
+        function openChart(symbol, interval) {
+            let modal = document.getElementById('chartModal');
+            let title = document.getElementById('modalTitle');
+            let container = document.getElementById('modalBodyContainer');
+            
+            title.innerText = `Live Chart: NSE:${symbol} (${interval} Minute Timeframe)`;
+            modal.style.display = 'flex';
+
+            let chartUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${symbol}&interval=${interval}&theme=dark`;
+            container.innerHTML = `<iframe src="${chartUrl}"></iframe>`;
+        }
+
+        function closeModal() {
+            document.getElementById('chartModal').style.display = 'none';
+            document.getElementById('modalBodyContainer').innerHTML = "";
+        }
+
+        window.onclick = function(event) {
+            let modal = document.getElementById('chartModal');
+            if (event.target === modal) {
+                closeModal();
             }
         }
 
