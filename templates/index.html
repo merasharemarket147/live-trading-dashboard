@@ -73,7 +73,7 @@
         }
         .table-container.active { display: block; }
         table { width: 100%; border-collapse: collapse; text-align: left; }
-        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-color); position: relative; }
+        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
         th {
             background-color: #0b0e14; color: var(--text-muted); font-size: 12px;
             text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
@@ -90,15 +90,7 @@
         .price-col { font-family: monospace; font-size: 14px; }
         .empty-msg { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; }
 
-        /* Mouse-over (Hover) Tooltip / Mini Preview Popup */
-        .hover-tooltip {
-            display: none; position: absolute; left: 50px; top: -160px; width: 320px; height: 180px;
-            background-color: var(--panel-bg); border: 2px solid var(--accent); border-radius: 8px;
-            z-index: 500; box-shadow: 0 8px 20px rgba(0,0,0,0.6); overflow: hidden; pointer-events: none;
-        }
-        .hover-tooltip iframe { width: 100%; height: 100%; border: none; }
-
-        /* Full Click Popup Modal Styling */
+        /* Popup Modal Styling */
         .modal {
             display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
             background-color: rgba(0,0,0,0.85); backdrop-filter: blur(4px);
@@ -195,7 +187,7 @@
         </div>
     </div>
 
-    <!-- Full Click Popup Modal -->
+    <!-- Click Popup Modal -->
     <div id="chartModal" class="modal">
         <div class="modal-content">
             <div class="modal-header">
@@ -274,12 +266,7 @@
 
                     let row = `<tr>
                         <td class="time-col">${item.time}</td>
-                        <td style="position: relative;" 
-                            onmouseenter="showHoverChart(this, '${item.symbol}', '${interval}')" 
-                            onmouseleave="hideHoverChart(this)">
-                            <span class="symbol-link" onclick="openChart('${item.symbol}', '${interval}')">${item.symbol}</span>
-                            <div class="hover-tooltip"></div>
-                        </td>
+                        <td><span class="symbol-link" onclick="openChart('${item.symbol}', '${interval}')">${item.symbol}</span></td>
                         <td class="price-col">₹${item.price}</td>
                         <td>${item.signal}</td>
                         <td class="price-col" style="color: #2962ff; font-weight: bold;">${tvSymbol}</td>
@@ -310,21 +297,7 @@
             }
         }
 
-        // Mouse Over (Hover) Mini Preview Functions
-        function showHoverChart(element, symbol, interval) {
-            let tooltip = element.querySelector('.hover-tooltip');
-            let chartUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${symbol}&interval=${interval}&theme=dark&hide_top_toolbar=true`;
-            tooltip.innerHTML = `<iframe src="${chartUrl}"></iframe>`;
-            tooltip.style.display = 'block';
-        }
-
-        function hideHoverChart(element) {
-            let tooltip = element.querySelector('.hover-tooltip');
-            tooltip.style.display = 'none';
-            tooltip.innerHTML = "";
-        }
-
-        // Click Full Popup Modal Functions
+        // Open Click Popup Modal
         function openChart(symbol, interval) {
             let modal = document.getElementById('chartModal');
             let title = document.getElementById('modalTitle');
