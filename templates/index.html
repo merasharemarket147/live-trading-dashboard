@@ -89,28 +89,6 @@
         .time-col { color: var(--text-muted); font-size: 13px; }
         .price-col { font-family: monospace; font-size: 14px; }
         .empty-msg { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; }
-
-        /* Popup Modal Styling */
-        .modal {
-            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
-            background-color: rgba(0,0,0,0.8); backdrop-filter: blur(4px);
-            justify-content: center; align-items: center;
-        }
-        .modal-content {
-            background-color: var(--panel-bg); border: 1px solid var(--border-color);
-            width: 85%; max-width: 950px; height: 600px; border-radius: 10px;
-            display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        }
-        .modal-header {
-            padding: 15px 20px; background-color: #0b0e14; display: flex;
-            justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color);
-        }
-        .modal-header h3 { margin: 0; color: white; font-size: 18px; }
-        .close-btn {
-            background: none; border: none; color: var(--text-muted); font-size: 24px; cursor: pointer;
-        }
-        .close-btn:hover { color: white; }
-        .modal-body { flex: 1; width: 100%; height: 100%; }
     </style>
 </head>
 <body>
@@ -186,20 +164,6 @@
         </div>
     </div>
 
-    <!-- Chart Popup Modal -->
-    <div id="chartModal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h3 id="modalTitle">Chart View</h3>
-                <button class="close-btn" onclick="closeModal()">&times;</button>
-            </div>
-            <div class="modal-body" id="tradingview_widget"></div>
-        </div>
-    </div>
-
-    <!-- TradingView Widget Script -->
-    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
     <script>
         let currentActiveSource = "scanner_15m_candle";
         let currentFileName = "First_15Min_Breakout";
@@ -263,13 +227,12 @@
 
                 globalData.forEach(item => {
                     let tvSymbol = `NSE:${item.symbol},`;
-                    // Determine interval based on source
-                    let interval = "15";
-                    if(item.source.includes("05m")) interval = "5";
+                    // Direct TradingView Link (Opens in a new clean tab without any annoying popup)
+                    let tvUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${item.symbol}`;
 
                     let row = `<tr>
                         <td class="time-col">${item.time}</td>
-                        <td><span class="symbol-link" onclick="openChart('${item.symbol}', '${interval}')">${item.symbol}</span></td>
+                        <td><a href="${tvUrl}" target="_blank" class="symbol-link">${item.symbol} ↗</a></td>
                         <td class="price-col">₹${item.price}</td>
                         <td>${item.signal}</td>
                         <td class="price-col" style="color: #2962ff; font-weight: bold;">${tvSymbol}</td>
@@ -297,46 +260,6 @@
                 
             } catch (error) {
                 console.error("Sync Error:", error);
-            }
-        }
-
-        // Open TradingView Chart Popup Modal
-        function openChart(symbol, interval) {
-            let modal = document.getElementById('chartModal');
-            let title = document.getElementById('modalTitle');
-            title.innerText = `Live Chart: NSE:${symbol} (${interval} Minute Timeframe)`;
-            modal.style.display = 'flex';
-
-            // Clear previous widget if any
-            document.getElementById('tradingview_widget').innerHTML = "";
-
-            new TradingView.widget({
-                "width": "100%",
-                "height": "100%",
-                "symbol": `NSE:${symbol}`,
-                "interval": interval,
-                "timezone": "Asia/Kolkata",
-                "theme": "dark",
-                "style": "1",
-                "locale": "en",
-                "toolbar_bg": "#f1f3f6",
-                "enable_publishing": false,
-                "hide_side_toolbar": false,
-                "allow_symbol_change": true,
-                "container_id": "tradingview_widget"
-            });
-        }
-
-        function closeModal() {
-            document.getElementById('chartModal').style.display = 'none';
-            document.getElementById('tradingview_widget').innerHTML = "";
-        }
-
-        // Close modal when clicking outside the box
-        window.onclick = function(event) {
-            let modal = document.getElementById('chartModal');
-            if (event.target === modal) {
-                closeModal();
             }
         }
 
