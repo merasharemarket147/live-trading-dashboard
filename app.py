@@ -1,207 +1,202 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pawan's Trading Terminal</title>
-    <style>
-        :root {
-            --bg-color: #0b0e14;
-            --panel-bg: #151924;
-            --text-main: #d1d4dc;
-            --text-muted: #787b86;
-            --border-color: #2a2e39;
-            --accent: #2962ff;
-        }
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0; padding: 0;
-        }
-        .header {
-            background-color: var(--panel-bg);
-            padding: 15px 30px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        .header h1 { margin: 0; font-size: 22px; color: #ffffff; }
-        .header-right { display: flex; align-items: center; gap: 15px; }
-        .scan-btn {
-            background-color: #089981; color: white; border: none;
-            padding: 8px 16px; border-radius: 4px; cursor: pointer;
-            font-weight: 600; font-size: 13px; transition: opacity 0.2s;
-        }
-        .scan-btn:hover { opacity: 0.85; }
-        .live-indicator {
-            display: flex; align-items: center; font-size: 13px; color: var(--text-muted); font-weight: 500;
-        }
-        .dot {
-            height: 8px; width: 8px; background-color: #089981; border-radius: 50%;
-            margin-right: 8px; box-shadow: 0 0 10px #089981; animation: blink 2s infinite;
-        }
-        @keyframes blink { 0% {opacity: 1;} 50% {opacity: 0.3;} 100% {opacity: 1;} }
+from flask import Flask, render_template, jsonify
+from datetime import datetime
+import yfinance as yf
+import pandas as pd
+import pytz
+import os
+import requests
+
+app = Flask(__name__)
+
+# दिन भर का डेटा सेव रखने के लिए लिस्ट
+daily_data_history = []
+tz = pytz.timezone('Asia/Kolkata')
+
+# Yahoo Finance को ब्लॉक करने से रोकने के लिए Fake Browser Session
+session = requests.Session()
+session.headers.update({
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+})
+
+@app.route('/')
+def home():
+    return render_template('index.html')
+
+@app.route('/api/data')
+def get_data():
+    return jsonify(daily_data_history)
+
+# यह लिंक आपके सभी स्कैनर्स एक साथ चलाएगा
+@app.route('/trigger-scanner')
+def run_scanner():
+    file_name = "watchlist.csv"
+    
+    if os.path.exists(file_name):
+        watchlist_df = pd.read_csv(file_name)
+        stocks_list = watchlist_df['Symbol'].dropna().tolist()
+    else:
+        stocks_list = ["NIFTY 50.NS", "RELIANCE.NS", "HDFCBANK.NS"]
+
+    min_price = 100           
+    new_signals_count = 0
+
+    for symbol in stocks_list:
+        clean_name = symbol.replace(".NS", "")
         
-        .container { padding: 25px 30px; max-width: 1200px; margin: auto; }
-        
-        /* Tabs */
-        .tabs { display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap; }
-        .tab-btn {
-            background-color: transparent; border: 1px solid var(--border-color);
-            color: var(--text-muted); padding: 10px 18px; cursor: pointer;
-            border-radius: 6px; font-weight: 600; font-size: 13px; transition: all 0.2s ease;
-        }
-        .tab-btn.active { background-color: var(--accent); color: #ffffff; border-color: var(--accent); }
-        .tab-btn:hover:not(.active) { background-color: #1e222d; color: var(--text-main); }
-        
-        /* Tables */
-        .table-container {
-            background: var(--panel-bg); border: 1px solid var(--border-color);
-            border-radius: 8px; overflow: hidden; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        .table-container.active { display: block; }
-        table { width: 100%; border-collapse: collapse; text-align: left; }
-        th, td { padding: 14px 20px; border-bottom: 1px solid var(--border-color); }
-        th {
-            background-color: #0b0e14; color: var(--text-muted); font-size: 12px;
-            text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600;
-        }
-        tr:hover { background-color: #1e222d; }
-        .symbol { font-weight: 700; color: #ffffff; font-size: 15px; }
-        .time-col { color: var(--text-muted); font-size: 13px; }
-        .price-col { font-family: monospace; font-size: 14px; }
-        .empty-msg { text-align: center; padding: 40px; color: var(--text-muted); font-style: italic; }
-    </style>
-</head>
-<body>
-
-    <div class="header">
-        <h1>📊 Pawan's Algo Terminal</h1>
-        <div class="header-right">
-            <button onclick="triggerManualScan()" id="scanBtn" class="scan-btn">🔄 Run Scanner Now</button>
-            <div class="live-indicator">
-                <div class="dot"></div> Live Sync
-            </div>
-        </div>
-    </div>
-
-    <div class="container">
-        <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('tab15m', event)">📁 First 15-Min Candle 1.4% Breakout</button>
-            <button class="tab-btn" onclick="switchTab('tabWick', event)">📁 MTF time (15 Minute) 1% Wick Reversal</button>
-            <button class="tab-btn" onclick="switchTab('tab05m', event)">📁 First 05 min 1% Wick Reversal</button>
-        </div>
-
-        <!-- Tab 1: First 15-Min Candle -->
-        <div id="tab15m" class="table-container active">
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
-                </thead>
-                <tbody id="body15m">
-                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Tab 2: Wick Reversal (15m) -->
-        <div id="tabWick" class="table-container">
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
-                </thead>
-                <tbody id="bodyWick">
-                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Tab 3: First 05 min 1% Wick Reversal -->
-        <div id="tab05m" class="table-container">
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th></tr>
-                </thead>
-                <tbody id="body05m">
-                    <tr><td colspan="4" class="empty-msg">Waiting for Cloud Data...</td></tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <script>
-        function switchTab(tabId, event) {
-            document.querySelectorAll('.table-container').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        try:
+            # ---------------------------------------------------------
+            # 1. 15-Minute Data Fetch (For Wick Reversal & 15m Candle)
+            # ---------------------------------------------------------
+            df_15m = yf.download(symbol, period="5d", interval="15m", progress=False, session=session)
             
-            document.getElementById(tabId).classList.add('active');
-            event.currentTarget.classList.add('active');
-        }
-
-        async function triggerManualScan() {
-            let btn = document.getElementById('scanBtn');
-            btn.innerText = "Scanning...";
-            btn.disabled = true;
-            try {
-                let res = await fetch('/trigger-scanner');
-                let data = await res.json();
-                alert("Scan Complete! New signals added: " + data.signals_added);
-                loadData();
-            } catch (err) {
-                alert("Scan Error!");
-            }
-            btn.innerText = "🔄 Run Scanner Now";
-            btn.disabled = false;
-        }
-
-        async function loadData() {
-            try {
-                let response = await fetch('/api/data');
-                let data = await response.json();
+            if not df_15m.empty:
+                if isinstance(df_15m.columns, pd.MultiIndex):
+                    df_15m.columns = df_15m.columns.get_level_values(0)
+                df_15m.dropna(inplace=True)
+                df_15m.reset_index(inplace=True)
                 
-                let body15m = document.getElementById('body15m');
-                let bodyWick = document.getElementById('bodyWick');
-                let body05m = document.getElementById('body05m');
-                
-                body15m.innerHTML = "";
-                bodyWick.innerHTML = "";
-                body05m.innerHTML = "";
-                
-                let c15 = false, cWick = false, c05 = false;
-
-                data.forEach(item => {
-                    let row = `<tr>
-                        <td class="time-col">${item.time}</td>
-                        <td class="symbol">${item.symbol}</td>
-                        <td class="price-col">₹${item.price}</td>
-                        <td>${item.signal}</td>
-                    </tr>`;
+                time_col_15 = 'Datetime' if 'Datetime' in df_15m.columns else 'index'
+                if df_15m[time_col_15].dt.tz is None:
+                    df_15m[time_col_15] = df_15m[time_col_15].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
+                else:
+                    df_15m[time_col_15] = df_15m[time_col_15].dt.tz_convert('Asia/Kolkata')
                     
-                    if(item.source === "scanner_15m_candle") {
-                        body15m.innerHTML += row;
-                        c15 = true;
-                    } else if(item.source === "scanner_15m_wick") {
-                        bodyWick.innerHTML += row;
-                        cWick = true;
-                    } else if(item.source === "scanner_05m_wick") {
-                        body05m.innerHTML += row;
-                        c05 = true;
-                    }
-                });
-
-                if(!c15) body15m.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
-                if(!cWick) bodyWick.innerHTML = `<tr><td colspan="4" class="empty-msg">No signals found today.</td></tr>`;
-                if(!c05) body05m.innerHTML = `<tr><td colspan="4" class="end-msg">No signals found today.</td></tr>`;
+                df_15m['Just_Date'] = df_15m[time_col_15].dt.date
+                latest_date_15 = df_15m['Just_Date'].iloc[-1]
+                today_15m = df_15m[df_15m['Just_Date'] == latest_date_15].copy()
                 
-            } catch (error) {
-                console.error("Sync Error:", error);
-            }
-        }
+                if not today_15m.empty and float(today_15m['Close'].iloc[-1]) >= min_price:
+                    
+                    # --- Scanner A: First 15-Min Candle 1.4% Breakout ---
+                    first_c_15 = today_15m.iloc[0]
+                    o_15, c_15 = float(first_c_15['Open']), float(first_c_15['Close'])
+                    time_15 = first_c_15[time_col_15].strftime("%Y-%m-%d %H:%M")
+                    pct_15 = ((c_15 - o_15) / o_15) * 100
+                    
+                    if abs(pct_15) >= 1.4:
+                        sig_id = f"{clean_name}_{time_15}_15m_1.4pct"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            arrow = "🚀" if pct_15 > 0 else "🩸"
+                            col = "#00b894" if pct_15 > 0 else "#d63031"
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": time_15,
+                                "symbol": clean_name,
+                                "price": round(c_15, 2),
+                                "signal": f"<span style='color:{col};font-weight:bold;'>{arrow} 1st Candle (15m): {round(pct_15, 2)}%</span>",
+                                "source": "scanner_15m_candle"
+                            })
+                            new_signals_count += 1
 
-        loadData();
-        setInterval(loadData, 15000); 
-    </script>
-</body>
-</html>
+                    # --- Scanner B: MTF time (15 Minute) 1% Wick Reversal ---
+                    today_15m['Max_OC'] = today_15m[['Open', 'Close']].max(axis=1)
+                    today_15m['Min_OC'] = today_15m[['Open', 'Close']].min(axis=1)
+                    today_15m['Upper_Wick'] = today_15m['High'] - today_15m['Max_OC']
+                    today_15m['Lower_Wick'] = today_15m['Min_OC'] - today_15m['Low']
+                    today_15m['Upper_Pct'] = (today_15m['Upper_Wick'] / today_15m['Close']) * 100
+                    today_15m['Lower_Pct'] = (today_15m['Lower_Wick'] / today_15m['Close']) * 100
+                    
+                    buy_wicks = today_15m[today_15m['Lower_Pct'] >= 1.0]
+                    sell_wicks = today_15m[today_15m['Upper_Pct'] >= 1.0]
+                    
+                    for _, row in buy_wicks.iterrows():
+                        t_str = row[time_col_15].strftime("%Y-%m-%d %H:%M")
+                        sig_id = f"{clean_name}_{t_str}_BUY_WICK"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": t_str,
+                                "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:green;font-weight:bold;'>BUY (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
+                                "source": "scanner_15m_wick"
+                            })
+                            new_signals_count += 1
+                            
+                    for _, row in sell_wicks.iterrows():
+                        t_str = row[time_col_15].strftime("%Y-%m-%d %H:%M")
+                        sig_id = f"{clean_name}_{t_str}_SELL_WICK"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": t_str,
+                                "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:red;font-weight:bold;'>SELL (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
+                                "source": "scanner_15m_wick"
+                            })
+                            new_signals_count += 1
+
+            # ---------------------------------------------------------
+            # 2. 5-Minute Data Fetch (For First 05 min 1% Wick Reversal)
+            # ---------------------------------------------------------
+            df_5m = yf.download(symbol, period="5d", interval="5m", progress=False, session=session)
+            
+            if not df_5m.empty:
+                if isinstance(df_5m.columns, pd.MultiIndex):
+                    df_5m.columns = df_5m.columns.get_level_values(0)
+                df_5m.dropna(inplace=True)
+                df_5m.reset_index(inplace=True)
+                
+                time_col_5 = 'Datetime' if 'Datetime' in df_5m.columns else 'index'
+                if df_5m[time_col_5].dt.tz is None:
+                    df_5m[time_col_5] = df_5m[time_col_5].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
+                else:
+                    df_5m[time_col_5] = df_5m[time_col_5].dt.tz_convert('Asia/Kolkata')
+                    
+                df_5m['Just_Date'] = df_5m[time_col_5].dt.date
+                latest_date_5 = df_5m['Just_Date'].iloc[-1]
+                today_5m = df_5m[df_5m['Just_Date'] == latest_date_5].copy()
+                
+                if not today_5m.empty and float(today_5m['Close'].iloc[-1]) >= min_price:
+                    
+                    # --- Scanner C: First 05 min 1% Wick Reversal ---
+                    today_5m['Max_OC'] = today_5m[['Open', 'Close']].max(axis=1)
+                    today_5m['Min_OC'] = today_5m[['Open', 'Close']].min(axis=1)
+                    today_5m['Upper_Wick'] = today_5m['High'] - today_5m['Max_OC']
+                    today_5m['Lower_Wick'] = today_5m['Min_OC'] - today_5m['Low']
+                    today_5m['Upper_Pct'] = (today_5m['Upper_Wick'] / today_5m['Close']) * 100
+                    today_5m['Lower_Pct'] = (today_5m['Lower_Wick'] / today_5m['Close']) * 100
+                    
+                    buy_wicks_5 = today_5m[today_5m['Lower_Pct'] >= 1.0]
+                    sell_wicks_5 = today_5m[today_5m['Upper_Pct'] >= 1.0]
+                    
+                    for _, row in buy_wicks_5.iterrows():
+                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
+                        sig_id = f"{clean_name}_{t_str}_5m_BUY_WICK"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": t_str,
+                                "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:green;font-weight:bold;'>BUY 05m (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
+                                "source": "scanner_05m_wick"
+                            })
+                            new_signals_count += 1
+                            
+                    for _, row in sell_wicks_5.iterrows():
+                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
+                        sig_id = f"{clean_name}_{t_str}_5m_SELL_WICK"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": t_str,
+                                "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:red;font-weight:bold;'>SELL 05m (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
+                                "source": "scanner_05m_wick"
+                            })
+                            new_signals_count += 1
+
+        except Exception as e:
+            continue
+
+    # मेमोरी बचाने के लिए सिर्फ लेटेस्ट 300 सिग्नल रखना
+    while len(daily_data_history) > 300:
+        daily_data_history.pop()
+
+    return jsonify({"status": "Scan Complete", "signals_added": new_signals_count})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=10000)
