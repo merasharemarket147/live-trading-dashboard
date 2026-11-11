@@ -26,7 +26,7 @@ def home():
 def get_data():
     return jsonify(daily_data_history)
 
-# यह लिंक आपके तीनों स्कैनर्स एक साथ चलाएगा
+# यह लिंक आपके सभी स्कैनर्स एक साथ चलाएगा
 @app.route('/trigger-scanner')
 def run_scanner():
     file_name = "watchlist.csv"
@@ -88,7 +88,7 @@ def run_scanner():
                             })
                             new_signals_count += 1
 
-                    # --- Scanner B: MTF 15-Min 1% Wick Reversal ---
+                    # --- Scanner B: MTF time (15 Minute) 1% Wick Reversal ---
                     today_15m['Max_OC'] = today_15m[['Open', 'Close']].max(axis=1)
                     today_15m['Min_OC'] = today_15m[['Open', 'Close']].min(axis=1)
                     today_15m['Upper_Wick'] = today_15m['High'] - today_15m['Max_OC']
@@ -128,7 +128,7 @@ def run_scanner():
                             new_signals_count += 1
 
             # ---------------------------------------------------------
-            # 2. 5-Minute Data Fetch (For First 05-Min Candle Scanner)[cite: 19]
+            # 2. 5-Minute Data Fetch (For First 05 min 1% Wick Reversal)
             # ---------------------------------------------------------
             df_5m = yf.download(symbol, period="5d", interval="5m", progress=False, session=session)
             
@@ -146,29 +146,48 @@ def run_scanner():
                     
                 df_5m['Just_Date'] = df_5m[time_col_5].dt.date
                 latest_date_5 = df_5m['Just_Date'].iloc[-1]
-                today_5m = df_5m[df_5m['Just_Date'] == latest_date_5]
+                today_5m = df_5m[df_5m['Just_Date'] == latest_date_5].copy()
                 
-                if not today_5m.empty:
-                    first_c_5 = today_5m.iloc[0]
-                    o_5, c_5 = float(first_c_5['Open']), float(first_c_5['Close'])
-                    time_5 = first_c_5[time_col_5].strftime("%Y-%m-%d %H:%M")
+                if not today_5m.empty and float(today_5m['Close'].iloc[-1]) >= min_price:
                     
-                    if o_5 >= min_price:
-                        pct_5 = ((c_5 - o_5) / o_5) * 100
-                        if abs(pct_5) >= 1.0:
-                            sig_id = f"{clean_name}_{time_5}_5m_1pct"
-                            if not any(item.get('id') == sig_id for item in daily_data_history):
-                                arrow = "🚀" if pct_5 > 0 else "🩸"
-                                col = "#00b894" if pct_5 > 0 else "#d63031"
-                                daily_data_history.insert(0, {
-                                    "id": sig_id,
-                                    "time": time_5,
-                                    "symbol": clean_name,
-                                    "price": round(c_5, 2),
-                                    "signal": f"<span style='color:{col};font-weight:bold;'>{arrow} 1st Candle (05m): {round(pct_5, 2)}%</span>",
-                                    "source": "scanner_05m_candle"
-                                })
-                                new_signals_count += 1
+                    # --- Scanner C: First 05 min 1% Wick Reversal ---
+                    today_5m['Max_OC'] = today_5m[['Open', 'Close']].max(axis=1)
+                    today_5m['Min_OC'] = today_5m[['Open', 'Close']].min(axis=1)
+                    today_5m['Upper_Wick'] = today_5m['High'] - today_5m['Max_OC']
+                    today_5m['Lower_Wick'] = today_5m['Min_OC'] - today_5m['Low']
+                    today_5m['Upper_Pct'] = (today_5m['Upper_Wick'] / today_5m['Close']) * 100
+                    today_5m['Lower_Pct'] = (today_5m['Lower_Wick'] / today_5m['Close']) * 100
+                    
+                    buy_wicks_5 = today_5m[today_5m['Lower_Pct'] >= 1.0]
+                    sell_wicks_5 = today_5m[today_5m['Upper_Pct'] >= 1.0]
+                    
+                    for _, row in buy_wicks_5.iterrows():
+                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
+                        sig_id = f"{clean_name}_{t_str}_5m_BUY_WICK"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": t_str,
+                                "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:green;font-weight:bold;'>BUY 05m (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
+                                "source": "scanner_05m_wick"
+                            })
+                            new_signals_count += 1
+                            
+                    for _, row in sell_wicks_5.iterrows():
+                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
+                        sig_id = f"{clean_name}_{t_str}_5m_SELL_WICK"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id,
+                                "time": t_str,
+                                "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:red;font-weight:bold;'>SELL 05m (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
+                                "source": "scanner_05m_wick"
+                            })
+                            new_signals_count += 1
 
         except Exception as e:
             continue
