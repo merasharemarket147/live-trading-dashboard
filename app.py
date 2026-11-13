@@ -34,7 +34,7 @@ def get_data():
 def run_scanner():
     global daily_data_history
     watchlist_file = "watchlist.csv"
-    zone_file = "zones.csv" # 4th scanner ke liye alag file
+    zone_file = "zones.csv"
     
     # Aaj ki current date (IST ke hisaab se)
     today_date_str = datetime.now(tz).strftime("%Y-%m-%d")
@@ -178,7 +178,7 @@ def run_scanner():
                 continue
 
     # -------------------------------------------------------------------------
-    # SCANNER 3: Hourly (1h) 1.5% Wick Reversal
+    # SCANNER 3: Hourly (1h) 1.5% Wick Reversal (Market Cap check removed)
     # -------------------------------------------------------------------------
     if stocks_list:
         wick_threshold = 1.5
@@ -219,40 +219,33 @@ def run_scanner():
                 sell_signals_1h = today_1h[today_1h['Upper_Wick_Pct'] >= wick_threshold]
 
                 if not buy_signals_1h.empty or not sell_signals_1h.empty:
-                    try:
-                        ticker_info = yf.Ticker(symbol).info
-                        mcap_cr = round(ticker_info.get('marketCap', 0) / 10000000, 2)
-                    except Exception:
-                        mcap_cr = 0
+                    for _, row in buy_signals_1h.iterrows():
+                        candle_time = row[time_col_1h].strftime("%Y-%m-%d %H:%M")
+                        wick_pct = round(row['Lower_Wick_Pct'], 2)
+                        sig_id = f"1h_{clean_name}_{candle_time}_BUY"
 
-                    if mcap_cr >= 30000:
-                        for _, row in buy_signals_1h.iterrows():
-                            candle_time = row[time_col_1h].strftime("%Y-%m-%d %H:%M")
-                            wick_pct = round(row['Lower_Wick_Pct'], 2)
-                            sig_id = f"1h_{clean_name}_{candle_time}_BUY"
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id, "time": candle_time, "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:green;font-weight:bold;'>BUY (1h Lower Wick {wick_pct}%)</span>",
+                                "source": "hourly_wick_scanner"
+                            })
+                            new_signals_count += 1
 
-                            if not any(item.get('id') == sig_id for item in daily_data_history):
-                                daily_data_history.insert(0, {
-                                    "id": sig_id, "time": candle_time, "symbol": clean_name,
-                                    "price": round(row['Close'], 2),
-                                    "signal": f"<span style='color:green;font-weight:bold;'>BUY (1h Lower Wick {wick_pct}%) | M.Cap: ₹{mcap_cr}Cr</span>",
-                                    "source": "hourly_wick_scanner"
-                                })
-                                new_signals_count += 1
+                    for _, row in sell_signals_1h.iterrows():
+                        candle_time = row[time_col_1h].strftime("%Y-%m-%d %H:%M")
+                        wick_pct = round(row['Upper_Wick_Pct'], 2)
+                        sig_id = f"1h_{clean_name}_{candle_time}_SELL"
 
-                        for _, row in sell_signals_1h.iterrows():
-                            candle_time = row[time_col_1h].strftime("%Y-%m-%d %H:%M")
-                            wick_pct = round(row['Upper_Wick_Pct'], 2)
-                            sig_id = f"1h_{clean_name}_{candle_time}_SELL"
-
-                            if not any(item.get('id') == sig_id for item in daily_data_history):
-                                daily_data_history.insert(0, {
-                                    "id": sig_id, "time": candle_time, "symbol": clean_name,
-                                    "price": round(row['Close'], 2),
-                                    "signal": f"<span style='color:red;font-weight:bold;'>SELL (1h Upper Wick {wick_pct}%) | M.Cap: ₹{mcap_cr}Cr</span>",
-                                    "source": "hourly_wick_scanner"
-                                })
-                                new_signals_count += 1
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
+                            daily_data_history.insert(0, {
+                                "id": sig_id, "time": candle_time, "symbol": clean_name,
+                                "price": round(row['Close'], 2),
+                                "signal": f"<span style='color:red;font-weight:bold;'>SELL (1h Upper Wick {wick_pct}%)</span>",
+                                "source": "hourly_wick_scanner"
+                            })
+                            new_signals_count += 1
             except Exception as e:
                 continue
 
