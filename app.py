@@ -5,14 +5,17 @@ import pandas as pd
 import pytz
 import os
 import requests
+import warnings
+
+warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 
-# दिन भर का डेटा सेव रखने के लिए लिस्ट
+# Din bhar ka data save rakhne ke liye list
 daily_data_history = []
 tz = pytz.timezone('Asia/Kolkata')
 
-# Yahoo Finance को ब्लॉक करने से रोकने के लिए Fake Browser Session
+# Yahoo Finance ko block hone se rokne ke liye Fake Browser Session
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -26,209 +29,203 @@ def home():
 def get_data():
     return jsonify(daily_data_history)
 
-# यह लिंक आपके सभी स्कैनर्स एक साथ चलाएगा
+# Yeh link aapke saare active scanners ek sath chalayega
 @app.route('/trigger-scanner')
 def run_scanner():
+    global daily_data_history
     file_name = "watchlist.csv"
     
-    if os.path.exists(file_name):
-        watchlist_df = pd.read_csv(file_name)
-        stocks_list = watchlist_df['Symbol'].dropna().tolist()
-    else:
-        stocks_list = ["NIFTY 50.NS", "RELIANCE.NS", "HDFCBANK.NS"]
+    # Aaj ki current date (IST ke hisaab se)
+    today_date_str = datetime.now(tz).strftime("%Y-%m-%d")
 
-    min_price = 100           
+    # Purana data saaf karna taaki sirf aaj ka fresh data rahe
+    if daily_data_history:
+        daily_data_history = [item for item in daily_data_history if item.get('time', '').startswith(today_date_str)]
+
     new_signals_count = 0
 
-    for symbol in stocks_list:
-        clean_name = symbol.replace(".NS", "")
+    if not os.path.exists(file_name):
+        return jsonify({"status": "Error", "message": "watchlist.csv not found", "signals_added": 0})
+
+    try:
+        watchlist_df = pd.read_csv(file_name)
+    except Exception as e:
+        return jsonify({"status": "Error", "message": str(e), "signals_added": 0})
+
+    # -------------------------------------------------------------------------
+    # SCANNER 1: First 05 min 1% Wick Reversal or Any Time
+    # -------------------------------------------------------------------------
+    if 'Symbol' in watchlist_df.columns:
+        stocks_list_5m = watchlist_df['Symbol'].dropna().tolist()
+        min_price_5m = 100
         
-        try:
-            # ---------------------------------------------------------
-            # 1. 15-Minute Data Fetch (For Wick Reversal & 15m Candle)
-            # ---------------------------------------------------------
-            df_15m = yf.download(symbol, period="5d", interval="15m", progress=False, session=session)
-            
-            if not df_15m.empty:
-                if isinstance(df_15m.columns, pd.MultiIndex):
-                    df_15m.columns = df_15m.columns.get_level_values(0)
-                df_15m.dropna(inplace=True)
-                df_15m.reset_index(inplace=True)
-                
-                time_col_15 = 'Datetime' if 'Datetime' in df_15m.columns else 'index'
-                if df_15m[time_col_15].dt.tz is None:
-                    df_15m[time_col_15] = df_15m[time_col_15].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
+        for symbol in stocks_list_5m:
+            clean_name = symbol.replace(".NS", "")
+            try:
+                df_5m = yf.download(symbol, period="1d", interval="5m", progress=False, session=session)
+                if not df_5m.empty:
+                    if isinstance(df_5m.columns, pd.MultiIndex):
+                        df_5m.columns = df_5m.columns.get_level_values(0)
+                    df_5m.dropna(inplace=True)
+                    df_5m.reset_index(inplace=True)
+                    
+                    time_col_5 = 'Datetime' if 'Datetime' in df_5m.columns else 'index'
+                    if df_5m[time_col_5].dt.tz is None:
+                        df_5m[time_col_5] = df_5m[time_col_5].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
+                    else:
+                        df_5m[time_col_5] = df_5m[time_col_5].dt.tz_convert('Asia/Kolkata')
+                        
+                    today_filter_date = datetime.now(tz).date()
+                    df_5m['Just_Date'] = df_5m[time_col_5].dt.date
+                    today_5m = df_5m[df_5m['Just_Date'] == today_filter_date].copy()
+                    
+                    if not today_5m.empty and float(today_5m['Close'].iloc[-1]) >= min_price_5m:
+                        today_5m['Max_OC'] = today_5m[['Open', 'Close']].max(axis=1)
+                        today_5m['Min_OC'] = today_5m[['Open', 'Close']].min(axis=1)
+                        today_5m['Upper_Wick'] = today_5m['High'] - today_5m['Max_OC']
+                        today_5m['Lower_Wick'] = today_5m['Min_OC'] - today_5m['Low']
+                        today_5m['Upper_Pct'] = (today_5m['Upper_Wick'] / today_5m['Close']) * 100
+                        today_5m['Lower_Pct'] = (today_5m['Lower_Wick'] / today_5m['Close']) * 100
+                        
+                        buy_wicks_5 = today_5m[today_5m['Lower_Pct'] >= 1.0]
+                        sell_wicks_5 = today_5m[today_5m['Upper_Pct'] >= 1.0]
+                        
+                        for _, row in buy_wicks_5.iterrows():
+                            t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
+                            sig_id = f"05m_{clean_name}_{t_str}_BUY"
+                            if not any(item.get('id') == sig_id for item in daily_data_history):
+                                daily_data_history.insert(0, {
+                                    "id": sig_id,
+                                    "time": t_str,
+                                    "symbol": clean_name,
+                                    "price": round(row['Close'], 2),
+                                    "signal": f"<span style='color:green;font-weight:bold;'>BUY 05m (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
+                                    "source": "scanner_05m_wick"
+                                })
+                                new_signals_count += 1
+                                
+                        for _, row in sell_wicks_5.iterrows():
+                            t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
+                            sig_id = f"05m_{clean_name}_{t_str}_SELL"
+                            if not any(item.get('id') == sig_id for item in daily_data_history):
+                                daily_data_history.insert(0, {
+                                    "id": sig_id,
+                                    "time": t_str,
+                                    "symbol": clean_name,
+                                    "price": round(row['Close'], 2),
+                                    "signal": f"<span style='color:red;font-weight:bold;'>SELL 05m (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
+                                    "source": "scanner_05m_wick"
+                                })
+                                new_signals_count += 1
+            except Exception as e:
+                continue
+
+    # -------------------------------------------------------------------------
+    # SCANNER 2: MTF time (15 Minute) 1% Wick Reversal
+    # -------------------------------------------------------------------------
+    if 'Symbol' in watchlist_df.columns:
+        stocks_list_15m = watchlist_df['Symbol'].dropna().tolist()
+        min_price_15m = 100
+        
+        for symbol in stocks_list_15m:
+            clean_name = symbol.replace(".NS", "")
+            try:
+                df_15m = yf.download(symbol, period="1d", interval="15m", progress=False, session=session)
+                if not df_15m.empty:
+                    if isinstance(df_15m.columns, pd.MultiIndex):
+                        df_15m.columns = df_15m.columns.get_level_values(0)
+                    df_15m.dropna(inplace=True)
+                    df_15m.reset_index(inplace=True)
+                    
+                    time_col_15 = 'Datetime' if 'Datetime' in df_15m.columns else 'index'
+                    if df_15m[time_col_15].dt.tz is None:
+                        df_15m[time_col_15] = df_15m[time_col_15].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
+                    else:
+                        df_15m[time_col_15] = df_15m[time_col_15].dt.tz_convert('Asia/Kolkata')
+                        
+                    today_filter_date = datetime.now(tz).date()
+                    df_15m['Just_Date'] = df_15m[time_col_15].dt.date
+                    today_15m = df_15m[df_15m['Just_Date'] == today_filter_date].copy()
+                    
+                    if not today_15m.empty and float(today_15m['Close'].iloc[-1]) >= min_price_15m:
+                        today_15m['Max_OC'] = today_15m[['Open', 'Close']].max(axis=1)
+                        today_15m['Min_OC'] = today_15m[['Open', 'Close']].min(axis=1)
+                        today_15m['Upper_Wick'] = today_15m['High'] - today_15m['Max_OC']
+                        today_15m['Lower_Wick'] = today_15m['Min_OC'] - today_15m['Low']
+                        today_15m['Upper_Pct'] = (today_15m['Upper_Wick'] / today_15m['Close']) * 100
+                        today_15m['Lower_Pct'] = (today_15m['Lower_Wick'] / today_15m['Close']) * 100
+                        
+                        buy_wicks = today_15m[today_15m['Lower_Pct'] >= 1.0]
+                        sell_wicks = today_15m[today_15m['Upper_Pct'] >= 1.0]
+                        
+                        for _, row in buy_wicks.iterrows():
+                            t_str = row[time_col_15].strftime("%Y-%m-%d %H:%M")
+                            sig_id = f"15m_{clean_name}_{t_str}_BUY_WICK"
+                            if not any(item.get('id') == sig_id for item in daily_data_history):
+                                daily_data_history.insert(0, {
+                                    "id": sig_id,
+                                    "time": t_str,
+                                    "symbol": clean_name,
+                                    "price": round(row['Close'], 2),
+                                    "signal": f"<span style='color:green;font-weight:bold;'>BUY 15m (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
+                                    "source": "scanner_15m_wick"
+                                })
+                                new_signals_count += 1
+                                
+                        for _, row in sell_wicks.iterrows():
+                            t_str = row[time_col_15].strftime("%Y-%m-%d %H:%M")
+                            sig_id = f"15m_{clean_name}_{t_str}_SELL_WICK"
+                            if not any(item.get('id') == sig_id for item in daily_data_history):
+                                daily_data_history.insert(0, {
+                                    "id": sig_id,
+                                    "time": t_str,
+                                    "symbol": clean_name,
+                                    "price": round(row['Close'], 2),
+                                    "signal": f"<span style='color:red;font-weight:bold;'>SELL 15m (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
+                                    "source": "scanner_15m_wick"
+                                })
+                                new_signals_count += 1
+            except Exception as e:
+                continue
+
+    # -------------------------------------------------------------------------
+    # SCANNER 3: Hourly (1h) 1.5% Wick Reversal
+    # -------------------------------------------------------------------------
+    if 'Symbol' in watchlist_df.columns:
+        hourly_stocks = watchlist_df['Symbol'].dropna().tolist()
+        wick_threshold = 1.5
+        min_price_1h = 100
+        min_mcap_cr = 30000
+
+        for symbol in hourly_stocks:
+            clean_name = symbol.replace(".NS", "")
+            try:
+                df_1h = yf.download(symbol, period="5d", interval="1h", progress=False, session=session)
+                if df_1h.empty:
+                    continue
+
+                if isinstance(df_1h.columns, pd.MultiIndex):
+                    df_1h.columns = df_1h.columns.get_level_values(0)
+
+                df_1h.dropna(inplace=True)
+                df_1h.reset_index(inplace=True)
+
+                time_col_1h = 'Datetime' if 'Datetime' in df_1h.columns else 'index'
+                if df_1h[time_col_1h].dt.tz is None:
+                    df_1h[time_col_1h] = df_1h[time_col_1h].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
                 else:
-                    df_15m[time_col_15] = df_15m[time_col_15].dt.tz_convert('Asia/Kolkata')
-                    
-                df_15m['Just_Date'] = df_15m[time_col_15].dt.date
-                latest_date_15 = df_15m['Just_Date'].iloc[-1]
-                today_15m = df_15m[df_15m['Just_Date'] == latest_date_15].copy()
-                
-                if not today_15m.empty and float(today_15m['Close'].iloc[-1]) >= min_price:
-                    
-                    # --- Scanner A: First 15-Min Candle 1.4% Breakout ---
-                    first_c_15 = today_15m.iloc[0]
-                    o_15, c_15 = float(first_c_15['Open']), float(first_c_15['Close'])
-                    time_15 = first_c_15[time_col_15].strftime("%Y-%m-%d %H:%M")
-                    pct_15 = ((c_15 - o_15) / o_15) * 100
-                    
-                    if abs(pct_15) >= 1.4:
-                        sig_id = f"{clean_name}_{time_15}_15m_1.4pct"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            arrow = "🚀" if pct_15 > 0 else "🩸"
-                            col = "#00b894" if pct_15 > 0 else "#d63031"
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": time_15,
-                                "symbol": clean_name,
-                                "price": round(c_15, 2),
-                                "signal": f"<span style='color:{col};font-weight:bold;'>{arrow} 1st Candle (15m): {round(pct_15, 2)}%</span>",
-                                "source": "scanner_15m_candle"
-                            })
-                            new_signals_count += 1
+                    df_1h[time_col_1h] = df_1h[time_col_1h].dt.tz_convert('Asia/Kolkata')
 
-                    # --- Scanner B: MTF time (15 Minute) 1% Wick Reversal ---
-                    today_15m['Max_OC'] = today_15m[['Open', 'Close']].max(axis=1)
-                    today_15m['Min_OC'] = today_15m[['Open', 'Close']].min(axis=1)
-                    today_15m['Upper_Wick'] = today_15m['High'] - today_15m['Max_OC']
-                    today_15m['Lower_Wick'] = today_15m['Min_OC'] - today_15m['Low']
-                    today_15m['Upper_Pct'] = (today_15m['Upper_Wick'] / today_15m['Close']) * 100
-                    today_15m['Lower_Pct'] = (today_15m['Lower_Wick'] / today_15m['Close']) * 100
-                    
-                    buy_wicks = today_15m[today_15m['Lower_Pct'] >= 1.0]
-                    sell_wicks = today_15m[today_15m['Upper_Pct'] >= 1.0]
-                    
-                    for _, row in buy_wicks.iterrows():
-                        t_str = row[time_col_15].strftime("%Y-%m-%d %H:%M")
-                        sig_id = f"{clean_name}_{t_str}_BUY_WICK"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:green;font-weight:bold;'>BUY (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
-                                "source": "scanner_15m_wick"
-                            })
-                            new_signals_count += 1
-                            
-                    for _, row in sell_wicks.iterrows():
-                        t_str = row[time_col_15].strftime("%Y-%m-%d %H:%M")
-                        sig_id = f"{clean_name}_{t_str}_SELL_WICK"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:red;font-weight:bold;'>SELL (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
-                                "source": "scanner_15m_wick"
-                            })
-                            new_signals_count += 1
+                today_filter_date = datetime.now(tz).date()
+                df_1h['Just_Date'] = df_1h[time_col_1h].dt.date
+                today_1h = df_1h[df_1h['Just_Date'] == today_filter_date].copy()
 
-            # ---------------------------------------------------------
-            # 2. 5-Minute Data Fetch (For 5m 1% Wick & 5m 0.50% Wick)
-            # ---------------------------------------------------------
-            df_5m = yf.download(symbol, period="5d", interval="5m", progress=False, session=session)
-            
-            if not df_5m.empty:
-                if isinstance(df_5m.columns, pd.MultiIndex):
-                    df_5m.columns = df_5m.columns.get_level_values(0)
-                df_5m.dropna(inplace=True)
-                df_5m.reset_index(inplace=True)
-                
-                time_col_5 = 'Datetime' if 'Datetime' in df_5m.columns else 'index'
-                if df_5m[time_col_5].dt.tz is None:
-                    df_5m[time_col_5] = df_5m[time_col_5].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
-                else:
-                    df_5m[time_col_5] = df_5m[time_col_5].dt.tz_convert('Asia/Kolkata')
-                    
-                df_5m['Just_Date'] = df_5m[time_col_5].dt.date
-                latest_date_5 = df_5m['Just_Date'].iloc[-1]
-                today_5m = df_5m[df_5m['Just_Date'] == latest_date_5].copy()
-                
-                if not today_5m.empty and float(today_5m['Close'].iloc[-1]) >= min_price:
-                    
-                    today_5m['Max_OC'] = today_5m[['Open', 'Close']].max(axis=1)
-                    today_5m['Min_OC'] = today_5m[['Open', 'Close']].min(axis=1)
-                    today_5m['Upper_Wick'] = today_5m['High'] - today_5m['Max_OC']
-                    today_5m['Lower_Wick'] = today_5m['Min_OC'] - today_5m['Low']
-                    today_5m['Upper_Pct'] = (today_5m['Upper_Wick'] / today_5m['Close']) * 100
-                    today_5m['Lower_Pct'] = (today_5m['Lower_Wick'] / today_5m['Close']) * 100
-                    
-                    # --- Scanner C: First 05 min 1% Wick Reversal ---
-                    buy_wicks_5 = today_5m[today_5m['Lower_Pct'] >= 1.0]
-                    sell_wicks_5 = today_5m[today_5m['Upper_Pct'] >= 1.0]
-                    
-                    for _, row in buy_wicks_5.iterrows():
-                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
-                        sig_id = f"{clean_name}_{t_str}_5m_1pct_BUY"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:green;font-weight:bold;'>BUY 05m (Low Wick {round(row['Lower_Pct'], 2)}%)</span>",
-                                "source": "scanner_05m_wick_1pct"
-                            })
-                            new_signals_count += 1
-                            
-                    for _, row in sell_wicks_5.iterrows():
-                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
-                        sig_id = f"{clean_name}_{t_str}_5m_1pct_SELL"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:red;font-weight:bold;'>SELL 05m (Up Wick {round(row['Upper_Pct'], 2)}%)</span>",
-                                "source": "scanner_05m_wick_1pct"
-                            })
-                            new_signals_count += 1
+                if today_1h.empty:
+                    continue
 
-                    # --- Scanner D: MTF time (05 Minute) 0.50% Wick Reversal ---[cite: 11]
-                    buy_wicks_50 = today_5m[today_5m['Lower_Pct'] >= 0.50]
-                    sell_wicks_50 = today_5m[today_5m['Upper_Pct'] >= 0.50]
-                    
-                    for _, row in buy_wicks_50.iterrows():
-                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
-                        sig_id = f"{clean_name}_{t_str}_5m_0.50pct_BUY"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:green;font-weight:bold;'>BUY 05m (0.50% Low Wick)</span>",
-                                "source": "scanner_05m_wick_050pct"
-                            })
-                            new_signals_count += 1
-                            
-                    for _, row in sell_wicks_50.iterrows():
-                        t_str = row[time_col_5].strftime("%Y-%m-%d %H:%M")
-                        sig_id = f"{clean_name}_{t_str}_5m_0.50pct_SELL"
-                        if not any(item.get('id') == sig_id for item in daily_data_history):
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": clean_name,
-                                "price": round(row['Close'], 2),
-                                "signal": f"<span style='color:red;font-weight:bold;'>SELL 05m (0.50% Up Wick)</span>",
-                                "source": "scanner_05m_wick_050pct"
-                            })
-                            new_signals_count += 1
+                current_price_1h = float(today_1h['Close'].iloc[-1])
+                if current_price_1h < min_price_1h:
+                    continue
 
-        except Exception as e:
-            continue
-
-    # मेमोरी बचाने के लिए सिर्फ लेटेस्ट 400 सिग्नल रखना
-    while len(daily_data_history) > 400:
-        daily_data_history.pop()
-
-    return jsonify({"status": "Scan Complete", "signals_added": new_signals_count})
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=10000)
+                today_1h['Max_Open_Close'] = today_1h[['Open', 'Close']].max(axis=1)
+                today_1h['Min_Open_Close'] = today_1h[['Open', '
