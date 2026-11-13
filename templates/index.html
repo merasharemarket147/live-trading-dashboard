@@ -107,16 +107,28 @@
         <!-- Action Bar with Tabs and Download Button -->
         <div class="action-bar">
             <div class="tabs">
-                <button class="tab-btn active" onclick="switchTab('tab15m', 'First_15Min_Breakout', event)">📁 First 15-Min Candle 1.4% Breakout</button>
-                <button class="tab-btn" onclick="switchTab('tabWick', 'MTF_15Min_Wick_Reversal', event)">📁 MTF time (15 Minute) 1% Wick Reversal</button>
-                <button class="tab-btn" onclick="switchTab('tab05m1pct', 'First_05Min_Wick_1pct', event)">📁 First 05 min 1% Wick Reversal</button>
-                <button class="tab-btn" onclick="switchTab('tab05m050pct', 'MTF_05Min_0.50pct_Wick', event)">📁 MTF time (05 Minute) 0.50% Wick Reversal</button>
+                <button class="tab-btn active" onclick="switchTab('tab05m', 'First_05Min_Wick_Reversal', event)">📁 First 05 min 1% Wick Reversal or Any Time</button>
+                <button class="tab-btn" onclick="switchTab('tab15m', 'MTF_15Min_Wick_Reversal', event)">📁 MTF time (15 Minute) 1% Wick Reversal</button>
+                <button class="tab-btn" onclick="switchTab('tabHourly', 'Hourly_1.5pct_Wick', event)">📁 Hourly (1h) 1.5% Wick Reversal</button>
+                <button class="tab-btn" onclick="switchTab('tabZone', 'Normal_Zone_Alerts', event)">📁 Normal Zone Alert Scanner (0.50%)</button>
             </div>
             <button onclick="downloadCSV()" class="btn download-btn">📥 Download Active Tab CSV</button>
         </div>
 
-        <!-- Tab 1: First 15-Min Candle -->
-        <div id="tab15m" class="table-container active">
+        <!-- Tab 1: First 05 min 1% Wick Reversal or Any Time -->
+        <div id="tab05m" class="table-container active">
+            <table>
+                <thead>
+                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
+                </thead>
+                <tbody id="body05m">
+                    <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Tab 2: MTF time (15 Minute) 1% Wick Reversal -->
+        <div id="tab15m" class="table-container">
             <table>
                 <thead>
                     <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
@@ -127,37 +139,25 @@
             </table>
         </div>
 
-        <!-- Tab 2: Wick Reversal (15m) -->
-        <div id="tabWick" class="table-container">
+        <!-- Tab 3: Hourly (1h) 1.5% Wick Reversal -->
+        <div id="tabHourly" class="table-container">
             <table>
                 <thead>
                     <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
                 </thead>
-                <tbody id="bodyWick">
+                <tbody id="bodyHourly">
                     <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
         </div>
 
-        <!-- Tab 3: First 05 min 1% Wick Reversal -->
-        <div id="tab05m1pct" class="table-container">
+        <!-- Tab 4: Normal Zone Alert Scanner (0.50%) -->
+        <div id="tabZone" class="table-container">
             <table>
                 <thead>
                     <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
                 </thead>
-                <tbody id="body05m1pct">
-                    <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Tab 4: MTF 05 min 0.50% Wick Reversal -->
-        <div id="tab05m050pct" class="table-container">
-            <table>
-                <thead>
-                    <tr><th>Time</th><th>Symbol</th><th>LTP</th><th>Signal Alert</th><th>TradingView Symbol</th></tr>
-                </thead>
-                <tbody id="body05m050pct">
+                <tbody id="bodyZone">
                     <tr><td colspan="5" class="empty-msg">Waiting for Cloud Data...</td></tr>
                 </tbody>
             </table>
@@ -165,8 +165,8 @@
     </div>
 
     <script>
-        let currentActiveSource = "scanner_15m_candle";
-        let currentFileName = "First_15Min_Breakout";
+        let currentActiveSource = "scanner_05m_wick";
+        let currentFileName = "First_05Min_Wick_Reversal";
 
         function switchTab(tabId, fileName, event) {
             document.querySelectorAll('.table-container').forEach(t => t.classList.remove('active'));
@@ -175,17 +175,17 @@
             document.getElementById(tabId).classList.add('active');
             event.currentTarget.classList.add('active');
 
-            if(tabId === 'tab15m') {
-                currentActiveSource = "scanner_15m_candle";
+            if(tabId === 'tab05m') {
+                currentActiveSource = "scanner_05m_wick";
                 currentFileName = fileName;
-            } else if(tabId === 'tabWick') {
+            } else if(tabId === 'tab15m') {
                 currentActiveSource = "scanner_15m_wick";
                 currentFileName = fileName;
-            } else if(tabId === 'tab05m1pct') {
-                currentActiveSource = "scanner_05m_wick_1pct";
+            } else if(tabId === 'tabHourly') {
+                currentActiveSource = "hourly_wick_scanner";
                 currentFileName = fileName;
-            } else if(tabId === 'tab05m050pct') {
-                currentActiveSource = "scanner_05m_wick_050pct";
+            } else if(tabId === 'tabZone') {
+                currentActiveSource = "normal_zone_scanner";
                 currentFileName = fileName;
             }
         }
@@ -213,22 +213,24 @@
                 let response = await fetch('/api/data');
                 globalData = await response.json();
                 
+                let body05m = document.getElementById('body05m');
                 let body15m = document.getElementById('body15m');
-                let bodyWick = document.getElementById('bodyWick');
-                let body05m1pct = document.getElementById('body05m1pct');
-                let body05m050pct = document.getElementById('body05m050pct');
+                let bodyHourly = document.getElementById('bodyHourly');
+                let bodyZone = document.getElementById('bodyZone');
                 
+                body05m.innerHTML = "";
                 body15m.innerHTML = "";
-                bodyWick.innerHTML = "";
-                body05m1pct.innerHTML = "";
-                body05m050pct.innerHTML = "";
+                bodyHourly.innerHTML = "";
+                bodyZone.innerHTML = "";
                 
-                let c15 = false, cWick = false, c05_1 = false, c05_05 = false;
+                let c05 = false, c15 = false, cHourly = false, cZone = false;
 
                 globalData.forEach(item => {
                     let tvSymbol = `NSE:${item.symbol},`;
-                    let interval = "15";
-                    if(item.source.includes("05m")) interval = "5";
+                    let interval = "5";
+                    if(item.source === "scanner_15m_wick") interval = "15";
+                    if(item.source === "hourly_wick_scanner") interval = "60";
+                    if(item.source === "normal_zone_scanner") interval = "1";
 
                     let row = `<tr>
                         <td class="time-col">${item.time}</td>
@@ -238,38 +240,36 @@
                         <td class="price-col" style="color: #2962ff; font-weight: bold;">${tvSymbol}</td>
                     </tr>`;
                     
-                    if(item.source === "scanner_15m_candle") {
+                    if(item.source === "scanner_05m_wick") {
+                        body05m.innerHTML += row;
+                        c05 = true;
+                    } else if(item.source === "scanner_15m_wick") {
                         body15m.innerHTML += row;
                         c15 = true;
-                    } else if(item.source === "scanner_15m_wick") {
-                        bodyWick.innerHTML += row;
-                        cWick = true;
-                    } else if(item.source === "scanner_05m_wick_1pct") {
-                        body05m1pct.innerHTML += row;
-                        c05_1 = true;
-                    } else if(item.source === "scanner_05m_wick_050pct") {
-                        body05m050pct.innerHTML += row;
-                        c05_05 = true;
+                    } else if(item.source === "hourly_wick_scanner") {
+                        bodyHourly.innerHTML += row;
+                        cHourly = true;
+                    } else if(item.source === "normal_zone_scanner") {
+                        bodyZone.innerHTML += row;
+                        cZone = true;
                     }
                 });
 
+                if(!c05) body05m.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
                 if(!c15) body15m.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
-                if(!cWick) bodyWick.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
-                if(!c05_1) body05m1pct.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
-                if(!c05_05) body05m050pct.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
+                if(!cHourly) bodyHourly.innerHTML = `<tr><td colspan="5" class="empty-msg">No signals found today.</td></tr>`;
+                if(!cZone) bodyZone.innerHTML = `<tr><td colspan="5" class="empty-msg">No alerts found within target zone.</td></tr>`;
                 
             } catch (error) {
                 console.error("Sync Error:", error);
             }
         }
 
-        // Forcefully Open Chart in a New Browser Tab/Window using JavaScript
         function openNewWindow(symbol, interval) {
             let chartUrl = `https://www.tradingview.com/chart/?symbol=NSE%3A${symbol}&interval=${interval}`;
             window.open(chartUrl, '_blank');
         }
 
-        // CSV Download Function
         function downloadCSV() {
             let filteredData = globalData.filter(item => item.source === currentActiveSource);
             
