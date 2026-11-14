@@ -11,11 +11,9 @@ warnings.filterwarnings('ignore')
 
 app = Flask(__name__)
 
-# Din bhar ka data save rakhne ke liye list
 daily_data_history = []
 tz = pytz.timezone('Asia/Kolkata')
 
-# Yahoo Finance ko block hone se rokne ke liye Fake Browser Session
 session = requests.Session()
 session.headers.update({
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -29,23 +27,19 @@ def home():
 def get_data():
     return jsonify(daily_data_history)
 
-# Yeh link aapke saare active scanners ek sath chalayega
 @app.route('/trigger-scanner')
 def run_scanner():
     global daily_data_history
     watchlist_file = "watchlist.csv"
     zone_file = "zones.csv"
     
-    # Aaj ki current date (IST ke hisaab se)
     today_date_str = datetime.now(tz).strftime("%Y-%m-%d")
 
-    # Purana data saaf karna taaki sirf aaj ka fresh data rahe
     if daily_data_history:
         daily_data_history = [item for item in daily_data_history if item.get('time', '').startswith(today_date_str)]
 
     new_signals_count = 0
 
-    # watchlist.csv check karna pehle 3 scanners ke liye
     stocks_list = []
     if os.path.exists(watchlist_file):
         try:
@@ -56,7 +50,7 @@ def run_scanner():
             pass
 
     # -------------------------------------------------------------------------
-    # SCANNER 1: First 05 min 1% Wick Reversal or Any Time
+    # SCANNER 1: First 05 min 1% Wick Reversal
     # -------------------------------------------------------------------------
     if stocks_list:
         for symbol in stocks_list:
@@ -178,7 +172,7 @@ def run_scanner():
                 continue
 
     # -------------------------------------------------------------------------
-    # SCANNER 3: Hourly (1h) 1.5% Wick Reversal (Market Cap check removed)
+    # SCANNER 3: Hourly (1h) 1.5% Wick Reversal
     # -------------------------------------------------------------------------
     if stocks_list:
         wick_threshold = 1.5
@@ -250,7 +244,7 @@ def run_scanner():
                 continue
 
     # -------------------------------------------------------------------------
-    # SCANNER 4: Normal Zone Alert Scanner (0.50%) - Reads from zones.csv
+    # SCANNER 4: Normal Zone Alert Scanner (Reads strategy from zones.csv)
     # -------------------------------------------------------------------------
     if os.path.exists(zone_file):
         try:
@@ -262,6 +256,9 @@ def run_scanner():
                         raw_symbol = str(row['Stock Symbol']).strip().upper()
                         direction = str(row['Direction']).strip().title()
                         entry_price = float(row['Zone Entry Price'])
+                        
+                        # Strategy column ko read karna (agar column nahi hai toh 'Zone Alert' dikहायega)
+                        strategy_name = str(row['Strategy']).strip() if 'Strategy' in df_zones.columns and pd.notna(row['Strategy']) else "Zone Alert"
                         
                         yf_symbol = raw_symbol + ".NS"
                         hist = yf.Ticker(yf_symbol).history(period="1d", interval="1m", session=session)
@@ -277,7 +274,8 @@ def run_scanner():
                             position = "Above Zone" if current_price > entry_price else "Below Zone"
                             sig_color = "green" if direction == "Buy" else "red"
                             
-                            sig_text = f"<span style='color:{sig_color};font-weight:bold;'>{direction.upper()} ALERT ({position}) | Target: ₹{entry_price} | Gap: {diff_pct:.2f}%</span>"
+                            # Signal text mein Strategy ka naam prominently show karna
+                            sig_text = f"<span style='color:{sig_color};font-weight:bold;'>{direction.upper()} | Strategy: {strategy_name} ({position}) | Target: ₹{entry_price} | Gap: {diff_pct:.2f}%</span>"
                             sig_id = f"zone_{raw_symbol}_{entry_price}_{direction}"
                             current_time_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M")
                             
