@@ -117,7 +117,7 @@ def run_scanner():
         for symbol in stocks_list:
             clean_name = symbol.replace(".NS", "")
             try:
-                df_15m = yf.download(symbol, period="1d", interval="15m", progress=False, session=session)
+                df_15m = yf.download(symbol, period="5d", interval="15m", progress=False, session=session)
                 if not df_15m.empty:
                     if isinstance(df_15m.columns, pd.MultiIndex):
                         df_15m.columns = df_15m.columns.get_level_values(0)
@@ -218,7 +218,7 @@ def run_scanner():
                         wick_pct = round(row['Lower_Wick_Pct'], 2)
                         sig_id = f"1h_{clean_name}_{candle_time}_BUY"
 
-                        if not any(item.get('id'] == sig_id for item in daily_data_history):
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
                             daily_data_history.insert(0, {
                                 "id": sig_id, "time": candle_time, "symbol": clean_name,
                                 "price": round(row['Close'], 2),
@@ -232,7 +232,7 @@ def run_scanner():
                         wick_pct = round(row['Upper_Wick_Pct'], 2)
                         sig_id = f"1h_{clean_name}_{candle_time}_SELL"
 
-                        if not any(item.get('id'] == sig_id for item in daily_data_history):
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
                             daily_data_history.insert(0, {
                                 "id": sig_id, "time": candle_time, "symbol": clean_name,
                                 "price": round(row['Close'], 2),
@@ -244,7 +244,7 @@ def run_scanner():
                 continue
 
     # -------------------------------------------------------------------------
-    # SCANNER 4: Normal Zone Alert Scanner (Only Latest Trigger per Stock)
+    # SCANNER 4: Historical Zone Alert Scanner (Last 5 Days Daily High/Low)
     # -------------------------------------------------------------------------
     if os.path.exists(zone_file):
         try:
@@ -262,7 +262,8 @@ def run_scanner():
                         strategy_name = str(row['Strategy']).strip() if 'Strategy' in df_zones.columns and pd.notna(row['Strategy']) else "N/A"
                         
                         yf_symbol = raw_symbol + ".NS"
-                        hist = yf.download(yf_symbol, period="5d", interval="15m", progress=False, session=session)
+                        # Pichle 5 din ka daily data fetch karna
+                        hist = yf.download(yf_symbol, period="5d", interval="1d", progress=False, session=session)
                         
                         if hist.empty:
                             continue
@@ -272,50 +273,46 @@ def run_scanner():
                         hist.dropna(inplace=True)
                         hist.reset_index(inplace=True)
                         
-                        time_col = 'Datetime' if 'Datetime' in hist.columns else 'index'
-                        if hist[time_col].dt.tz is None:
-                            hist[time_col] = hist[time_col].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
-                        else:
-                            hist[time_col] = hist[time_col].dt.tz_convert('Asia/Kolkata')
+                        date_col = 'Date' if 'Date' in hist.columns else hist.columns[0]
+                        
+                        for _, day_row in hist.iterrows():
+                            day_date_obj = pd.to_datetime(day_row[date_col])
+                            day_date_str = day_date_obj.strftime("%Y-%m-%d")
                             
-                        # Sirf wohi rows filter karein jo range ke andar hain
-                        matched_rows = []
-                        for _, h_row in hist.iterrows():
-                            c_price = float(h_row['Close'])
-                            price_diff = abs(c_price - entry_price)
+                            day_high = float(day_row['High'])
+                            day_low = float(day_row['Low'])
+                            day_close = float(day_row['Close'])
+                            
+                            if day_low <= entry_price <= day_high:
+                                closest_price = entry_price
+                            elif entry_price > day_high:
+                                closest_price = day_high
+                            else:
+                                closest_price = day_low
+                                
+                            price_diff = abs(closest_price - entry_price)
                             diff_pct = (price_diff / entry_price) * 100
                             
                             if diff_pct <= alert_buffer_pct:
-                                matched_rows.append((h_row[time_col], c_price, diff_pct))
+                                position = "Above Zone" if day_close > entry_price else "Below Zone"
                                 
-                        if matched_rows:
-                            # Sabse latest (recent) candle ko uthayenge taaki bar-bar duplicate alert na aaye
-                            matched_rows.sort(key=lambda x: x[0], reverse=True)
-                            latest_match = matched_rows[0]
-                            
-                            t_obj, c_price, diff_pct = latest_match
-                            t_str = t_obj.strftime("%Y-%m-%d %H:%M")
-                            position = "Above Zone" if c_price > entry_price else "Below Zone"
-                            
-                            if direction == "Buy":
-                                sig_text = f"<span style='color:green;font-weight:bold;'>🟢 BUY ALERT [{strategy_name}] | Price: ₹{c_price:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
-                            else:
-                                sig_text = f"<span style='color:red;font-weight:bold;'>🔴 SELL ALERT [{strategy_name}] | Price: ₹{c_price:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
+                                if direction == "Buy":
+                                    sig_text = f"<span style='color:green;font-weight:bold;'>🟢 BUY ALERT [{strategy_name}] | Close: ₹{day_close:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
+                                else:
+                                    sig_text = f"<span style='color:red;font-weight:bold;'>🔴 SELL ALERT [{strategy_name}] | Close: ₹{day_close:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
+                                    
+                                sig_id = f"zone_{raw_symbol}_{entry_price}_{direction}_{day_date_str}"
                                 
-                            sig_id = f"zone_{raw_symbol}_{entry_price}_{direction}"
-                            
-                            # Purana same stock ka alert hata kar sirf latest rakhenge
-                            daily_data_history = [item for item in daily_data_history if item.get('id') != sig_id]
-                            
-                            daily_data_history.insert(0, {
-                                "id": sig_id,
-                                "time": t_str,
-                                "symbol": raw_symbol,
-                                "price": round(c_price, 2),
-                                "signal": sig_text,
-                                "source": "normal_zone_scanner"
-                            })
-                            new_signals_count += 1
+                                if not any(item.get('id') == sig_id for item in daily_data_history):
+                                    daily_data_history.insert(0, {
+                                        "id": sig_id,
+                                        "time": f"{day_date_str} (Daily)",
+                                        "symbol": raw_symbol,
+                                        "price": round(day_close, 2),
+                                        "signal": sig_text,
+                                        "source": "normal_zone_scanner"
+                                    })
+                                    new_signals_count += 1
                     except Exception as e:
                         continue
         except Exception as e:
