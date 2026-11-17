@@ -250,27 +250,31 @@ def run_scanner():
                 continue
 
     # -------------------------------------------------------------------------
-    # SCANNER 4: Normal Zone Alert Scanner (Reads directly from zones.csv)
+    # SCANNER 4: Normal Zone Alert Scanner (Using yf.download with session)
     # -------------------------------------------------------------------------
     if os.path.exists(zone_file):
         try:
             df_zones = pd.read_csv(zone_file)
-            if not df_zones.empty and 'Stock Symbol' in df_zones.columns:
+            if not df_zones.empty and 'Stock' in df_zones.columns:
                 alert_buffer_pct = 0.50
                 for index, row in df_zones.iterrows():
                     try:
-                        zone_date = str(row['Zone Date']).strip()
-                        raw_symbol = str(row['Stock Symbol']).strip().upper()
+                        raw_symbol = str(row['Stock']).strip().upper()
                         direction = str(row['Direction']).strip().title()
-                        entry_price = float(row['Zone Entry Price'])
+                        entry_price = float(row['Entry Price'])
                         
                         strategy_name = str(row['Strategy']).strip() if 'Strategy' in df_zones.columns and pd.notna(row['Strategy']) else "N/A"
                         
                         yf_symbol = raw_symbol + ".NS"
-                        hist = yf.Ticker(yf_symbol).history(period="1d", interval="1m", session=session)
+                        # yf.download ka use kiya hai taaki Render par session / User-Agent block na ho
+                        hist = yf.download(yf_symbol, period="1d", interval="1m", progress=False, session=session)
                         
                         if hist.empty:
                             continue
+                            
+                        if isinstance(hist.columns, pd.MultiIndex):
+                            hist.columns = hist.columns.get_level_values(0)
+                        hist.dropna(inplace=True)
                             
                         current_price = float(hist['Close'].iloc[-1])
                         
