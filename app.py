@@ -36,13 +36,7 @@ def run_scanner():
     watchlist_file = "watchlist.csv"
     zone_file = "zones.csv"
     
-    # Aaj ki current date (IST ke hisaab se)
-    today_date_str = datetime.now(tz).strftime("%Y-%m-%d")
-
-    # Purana data saaf karna taaki sirf aaj ka fresh data rahe
-    if daily_data_history:
-        daily_data_history = [item for item in daily_data_history if item.get('time', '').startswith(today_date_str)]
-
+    today_str = datetime.now(tz).strftime("%Y-%m-%d")
     new_signals_count = 0
 
     # watchlist.csv check karna pehle 3 scanners ke liye
@@ -62,7 +56,7 @@ def run_scanner():
         for symbol in stocks_list:
             clean_name = symbol.replace(".NS", "")
             try:
-                df_5m = yf.download(symbol, period="1d", interval="5m", progress=False, session=session)
+                df_5m = yf.download(symbol, period="5d", interval="5m", progress=False, session=session)
                 if not df_5m.empty:
                     if isinstance(df_5m.columns, pd.MultiIndex):
                         df_5m.columns = df_5m.columns.get_level_values(0)
@@ -123,7 +117,7 @@ def run_scanner():
         for symbol in stocks_list:
             clean_name = symbol.replace(".NS", "")
             try:
-                df_15m = yf.download(symbol, period="1d", interval="15m", progress=False, session=session)
+                df_15m = yf.download(symbol, period="5d", interval="15m", progress=False, session=session)
                 if not df_15m.empty:
                     if isinstance(df_15m.columns, pd.MultiIndex):
                         df_15m.columns = df_15m.columns.get_level_values(0)
@@ -250,24 +244,26 @@ def run_scanner():
                 continue
 
     # -------------------------------------------------------------------------
-    # SCANNER 4: Normal Zone Alert Scanner (Using yf.download with session)
+    # SCANNER 4: Normal Zone Alert Scanner (Scans last 5 days for zone hits)
     # -------------------------------------------------------------------------
     if os.path.exists(zone_file):
         try:
             df_zones = pd.read_csv(zone_file)
-            if not df_zones.empty and 'Stock' in df_zones.columns:
+            stock_col = 'Stock' if 'Stock' in df_zones.columns else ('Stock Symbol' if 'Stock Symbol' in df_zones.columns else None)
+            price_col = 'Entry Price' if 'Entry Price' in df_zones.columns else ('Zone Entry Price' if 'Zone Entry Price' in df_zones.columns else None)
+            
+            if not df_zones.empty and stock_col and price_col:
                 alert_buffer_pct = 0.50
                 for index, row in df_zones.iterrows():
                     try:
-                        raw_symbol = str(row['Stock']).strip().upper()
+                        raw_symbol = str(row[stock_col]).strip().upper()
                         direction = str(row['Direction']).strip().title()
-                        entry_price = float(row['Entry Price'])
-                        
+                        entry_price = float(row[price_col])
                         strategy_name = str(row['Strategy']).strip() if 'Strategy' in df_zones.columns and pd.notna(row['Strategy']) else "N/A"
                         
                         yf_symbol = raw_symbol + ".NS"
-                        # yf.download ka use kiya hai taaki Render par session / User-Agent block na ho
-                        hist = yf.download(yf_symbol, period="1d", interval="1m", progress=False, session=session)
+                        # Last 5 days ka data download karenge taaki pichle dinos ke hits bhi dikhein
+                        hist = yf.download(yf_symbol, period="5d", interval="15m", progress=False, session=session)
                         
                         if hist.empty:
                             continue
@@ -275,44 +271,57 @@ def run_scanner():
                         if isinstance(hist.columns, pd.MultiIndex):
                             hist.columns = hist.columns.get_level_values(0)
                         hist.dropna(inplace=True)
-                            
-                        current_price = float(hist['Close'].iloc[-1])
+                        hist.reset_index(inplace=True)
                         
-                        price_diff = abs(current_price - entry_price)
-                        diff_pct = (price_diff / entry_price) * 100
-                        
-                        if diff_pct <= alert_buffer_pct:
-                            position = "Above Zone" if current_price > entry_price else "Below Zone"
+                        time_col = 'Datetime' if 'Datetime' in hist.columns else 'index'
+                        if hist[time_col].dt.tz is None:
+                            hist[time_col] = hist[time_col].dt.tz_localize('UTC').dt.tz_convert('Asia/Kolkata')
+                        else:
+                            hist[time_col] = hist[time_col].dt.tz_convert('Asia/Kolkata')
                             
-                            if direction == "Buy":
-                                sig_text = f"<span style='color:green;font-weight:bold;'>🟢 BUY ALERT [{strategy_name}] | CMP: ₹{current_price:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
-                            else:
-                                sig_text = f"<span style='color:red;font-weight:bold;'>🔴 SELL ALERT [{strategy_name}] | CMP: ₹{current_price:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
+                        for _, h_row in hist.iterrows():
+                            c_price = float(h_row['Close'])
+                            price_diff = abs(c_price - entry_price)
+                            diff_pct = (price_diff / entry_price) * 100
+                            
+                            if diff_pct <= alert_buffer_pct:
+                                t_str = h_row[time_col].strftime("%Y-%m-%d %H:%M")
+                                position = "Above Zone" if c_price > entry_price else "Below Zone"
                                 
-                            sig_id = f"zone_{raw_symbol}_{entry_price}_{direction}"
-                            current_time_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M")
-                            
-                            existing_idx = next((i for i, item in enumerate(daily_data_history) if item.get('id') == sig_id), None)
-                            zone_item = {
-                                "id": sig_id,
-                                "time": current_time_str,
-                                "symbol": raw_symbol,
-                                "price": round(current_price, 2),
-                                "signal": sig_text,
-                                "source": "normal_zone_scanner"
-                            }
-                            
-                            if existing_idx is not None:
-                                daily_data_history[existing_idx] = zone_item
-                            else:
-                                daily_data_history.insert(0, zone_item)
-                                new_signals_count += 1
+                                if direction == "Buy":
+                                    sig_text = f"<span style='color:green;font-weight:bold;'>🟢 BUY ALERT [{strategy_name}] | Price: ₹{c_price:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
+                                else:
+                                    sig_text = f"<span style='color:red;font-weight:bold;'>🔴 SELL ALERT [{strategy_name}] | Price: ₹{c_price:.2f} | Target: ₹{entry_price} | Gap: {diff_pct:.2f}% ({position})</span>"
+                                    
+                                sig_id = f"zone_{raw_symbol}_{entry_price}_{direction}_{t_str}"
+                                
+                                if not any(item.get('id') == sig_id for item in daily_data_history):
+                                    daily_data_history.append({
+                                        "id": sig_id,
+                                        "time": t_str,
+                                        "symbol": raw_symbol,
+                                        "price": round(c_price, 2),
+                                        "signal": sig_text,
+                                        "source": "normal_zone_scanner"
+                                    })
+                                    new_signals_count += 1
                     except Exception as e:
                         continue
         except Exception as e:
             pass
 
-    while len(daily_data_history) > 400:
+    # -------------------------------------------------------------------------
+    # SORTING LOGIC: Today's items first (newest first), then Past 5 days items
+    # -------------------------------------------------------------------------
+    today_items = [item for item in daily_data_history if item.get('time', '').startswith(today_str)]
+    older_items = [item for item in daily_data_history if not item.get('time', '').startswith(today_str)]
+    
+    today_items.sort(key=lambda x: x.get('time', ''), reverse=True)
+    older_items.sort(key=lambda x: x.get('time', ''), reverse=True)
+    
+    daily_data_history = today_items + older_items
+
+    while len(daily_data_history) > 500:
         daily_data_history.pop()
 
     return jsonify({"status": "Scan Complete", "signals_added": new_signals_count})
