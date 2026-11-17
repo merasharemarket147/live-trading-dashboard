@@ -224,7 +224,7 @@ def run_scanner():
                         wick_pct = round(row['Lower_Wick_Pct'], 2)
                         sig_id = f"1h_{clean_name}_{candle_time}_BUY"
 
-                        if not any(item.get('id'] == sig_id for item in daily_data_history):
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
                             daily_data_history.insert(0, {
                                 "id": sig_id, "time": candle_time, "symbol": clean_name,
                                 "price": round(row['Close'], 2),
@@ -238,7 +238,7 @@ def run_scanner():
                         wick_pct = round(row['Upper_Wick_Pct'], 2)
                         sig_id = f"1h_{clean_name}_{candle_time}_SELL"
 
-                        if not any(item.get('id'] == sig_id for item in daily_data_history):
+                        if not any(item.get('id') == sig_id for item in daily_data_history):
                             daily_data_history.insert(0, {
                                 "id": sig_id, "time": candle_time, "symbol": clean_name,
                                 "price": round(row['Close'], 2),
@@ -288,7 +288,7 @@ def run_scanner():
                             sig_id = f"zone_{raw_symbol}_{entry_price}_{direction}"
                             current_time_str = datetime.now(tz).strftime("%Y-%m-%d %H:%M")
                             
-                            existing_idx = next((i for i, item in enumerate(daily_data_history) if item.get('id'] == sig_id), None)
+                            existing_idx = next((i for i, item in enumerate(daily_data_history) if item.get('id') == sig_id), None)
                             zone_item = {
                                 "id": sig_id,
                                 "time": current_time_str,
